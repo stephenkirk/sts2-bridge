@@ -40,8 +40,18 @@ On an M-series Mac: boot ≈ 0.5 s, combat start ≈ 8 ms, step ≈ 5 ms (21 ms 
 
 ## Setup
 
-You'll need an installed copy of Slay the Spire 2 (the fixtures were recorded on v0.111.0), a .NET 9 runtime
-plus any SDK ≥ 9, and Python ≥ 3.11. The first build also needs network access for NuGet.
+Youl'll need Python ≥ 3.11 to run the code in this project. Optional extras: `.[nn]` (torch, numpy) for `agents/nn`,
+`.[spgn]` (cbor2) for reading raw tapes. The committed excerpt needs neither.
+
+```sh
+uv venv .venv
+uv pip install --python .venv/bin/python -e '.[nn]'
+```
+### Local 
+
+If you have an installed copy of Slay the Spire 2 (the fixtures were recorded on v0.111.0) available on the
+same system, you can set up a .NET 9 runtime plus any SDK ≥ 9 and network access for NuGet for the first build
+for a straight-forward local setup:
 
 ```sh
 ./setup.sh                                        # game DLLs into lib/, IL-patch sts2.dll, build the drivers
@@ -52,12 +62,52 @@ If the game isn't in a default Steam location, pass its directory to `./setup.sh
 The script patches a local copy of the DLL; it only reads from the install. The tests also check that
 nothing in the game's save directory changes.
 
-Optional extras: `.[nn]` (torch, numpy) for `agents/nn`, `.[spgn]` (cbor2) for reading raw tapes.
-The committed excerpt needs neither.
+### Virtualized
+
+If you do not have Slay the Spire 2 available, you can also run this code against a docker container. The
+`CombatWorkerContainer` instance you get can, for the most part, be used interchangeably with the `CombatWorker`
+the documentation uses.
+
+Start the worker container with its input files mounted, then connect to it
+from Python. The path passed to the worker is a path inside the container:
 
 ```sh
-uv venv .venv
-uv pip install --python .venv/bin/python -e '.[nn]'
+docker run --rm -p 18888:18888 \
+  --mount type=bind,source=/path/to/fixtures,target=/fixtures,readonly \
+  headless-sts2:0.111.0
+```
+
+```python
+from sts2bridge.fixtures import MCR
+from sts2bridge import CombatWorkerContainer
+
+with CombatWorkerContainer(address=("127.0.0.1", 18888)) as worker:
+    tape = worker.tape(f"/fixtures/{MCR.name}")
+    print(f"{tape['version']}: {len(tape['checkpoints'])} recorded checksums")
+```
+---
+
+For a self-contained setup, a Python wrapper for docker such as `testcontainers` can be used:
+
+```python
+from sts2bridge.fixtures import MCR, FIXTURES
+from sts2bridge.worker import CombatWorkerContainer
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
+
+with DockerContainer("headless-sts2:0.111.0", ports=[18888]).with_volume_mapping(
+    str(FIXTURES), "/fixtures", mode="ro"
+) as container:
+    container.waiting_for(
+        LogMessageWaitStrategy("STS2 bridge worker listening on").with_startup_timeout(180)
+    )
+    address = (
+        container.get_container_host_ip(),
+        int(container.get_exposed_port(18888)),
+    )
+    with CombatWorkerContainer(address=address) as worker:
+        tape = worker.tape(f"/fixtures/{MCR.name}")
+        print(f"{tape['version']}: {len(tape['checkpoints'])} recorded checksums")
 ```
 
 ## Layout

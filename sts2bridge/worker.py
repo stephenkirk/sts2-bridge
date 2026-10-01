@@ -21,6 +21,7 @@ the parity test feeds through ``step``.
 
 import json
 import os
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
@@ -49,14 +50,20 @@ class CombatWorker:
         self._log = open(self.log_path, "w")
         self._proc = subprocess.Popen(["dotnet", str(BINARY)], cwd=self.workdir, text=True, bufsize=1,
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log)
+        self._stdin, self._stdout = self._proc.stdin, self._proc.stdout
+        self._quit_command = json.dumps({"cmd": "quit"}) + "\n"
+        self._quit_if_running = lambda: self._proc.poll() is None
+        self._wait_for_exit = lambda: self._proc.wait(timeout=30)
+        self._close_transport = lambda: None
+        self._read_eof_error = lambda: f"worker exited (rc={self._proc.poll()}); see {self.log_path}"
         self.boot_ms = self._read()["boot_ms"]
         self.run_trace_path = None
         self._run_trace = None
 
     def _read(self):
-        line = self._proc.stdout.readline()
+        line = self._stdout.readline()
         if not line:
-            raise WorkerError(f"worker exited (rc={self._proc.poll()}); see {self.log_path}")
+            raise WorkerError(self._read_eof_error())
         reply = json.loads(line)
         if not reply.get("ok"):
             raise WorkerError(reply.get("error"))
@@ -69,14 +76,18 @@ class CombatWorker:
     # A request in two halves, so one caller can keep several workers busy at once: send to each, then receive
     # from each. Every send must be matched by one receive, in order.
     def send(self, cmd, **fields):
-        self._proc.stdin.write(json.dumps({"cmd": cmd, **fields}) + "\n")
+        self._stdin.write(json.dumps({"cmd": cmd, **fields}) + "\n")
+        self._stdin.flush()
 
     def receive(self):
         return self._read()
 
+    def _worker_path(self, path):
+        return str(Path(path).resolve())
+
     def load(self, mcr, hashes=True):
         # The worker runs in its own scratch directory, so hand it an absolute path.
-        return self.request("load", mcr=str(Path(mcr).resolve()), hashes=hashes)
+        return self.request("load", mcr=self._worker_path(mcr), hashes=hashes)
 
     def start(self, spec, hashes=True, reuse_map=False):
         """Enter any fight from a spec: character, ascension, seed, encounter and a partial save player (see
@@ -117,7 +128,7 @@ class CombatWorker:
     def run_combat_snapshot(self, path):
         """Write the game's own recording of the current run combat as an .mcr. Its initial state is the run as it
         entered this room, so another worker's ``load`` re-enters the same fight while this run carries on."""
-        return self.request("run_combat_snapshot", path=str(Path(path).resolve()))
+        return self.request("run_combat_snapshot", path=self._worker_path(path))
 
     def run_observe(self):
         return self.request("run_observe")
@@ -129,17 +140,41 @@ class CombatWorker:
         return self.request("observe")
 
     def tape(self, mcr):
-        return self.request("tape", mcr=str(Path(mcr).resolve()))
+        return self.request("tape", mcr=self._worker_path(mcr))
 
     def close(self):
-        if self._proc.poll() is None:
-            self._proc.stdin.write(json.dumps({"cmd": "quit"}) + "\n")
-            self._proc.stdin.close()
-            self._proc.wait(timeout=30)
-        self._proc.stdout.close()
+        if self._quit_command and self._quit_if_running():
+            self._stdin.write(self._quit_command)
+        self._stdin.close()
+        self._wait_for_exit()
+        self._stdout.close()
+        self._close_transport()
         if self._run_trace:
             self._run_trace.close()
-        self._log.close()
+        if self._log is not None:
+            self._log.close()
+
+
+class CombatWorkerContainer(CombatWorker):
+    def __init__(self, address, *, workdir=None):
+        self.workdir = Path(workdir or tempfile.mkdtemp(prefix="combat-worker-container-"))
+        self.workdir.mkdir(parents=True, exist_ok=True)
+        self._socket = socket.create_connection(address)
+        self._stdin = self._socket.makefile("w", encoding="utf-8", buffering=1)
+        self._stdout = self._socket.makefile("r", encoding="utf-8", buffering=1)
+        self._quit_command = None
+        self._quit_if_running = lambda: False
+        self._wait_for_exit = lambda: None
+        self._close_transport = self._socket.close
+        self._read_eof_error = lambda: "container worker disconnected; inspect the container logs"
+        self._log = None
+        self.boot_ms = self._read()["boot_ms"]
+        self.run_trace_path = None
+        self._run_trace = None
+
+    def _worker_path(self, path):
+        # Container paths come from runtime mounts and are already in the worker's namespace.
+        return str(path)
 
     def __enter__(self):
         return self
