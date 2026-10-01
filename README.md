@@ -8,7 +8,8 @@ The rules stay; the clicking goes. This started as plumbing for my own game-agen
 Ways in:
 
 - **`.mcr`**: the game's combat recording. Replay it, or load it and step from the first turn.
-- **`.run`**: the game's run history. Build a combat spec from any fight in it.
+- **`.run`**: the game's run history. Build a combat spec from any fight in it, or read it floor by floor
+  with `python3 -m sts2bridge.chronology x.run` (`--format json|jsonl`; pure Python, no setup).
 - **New run**: start a whole run under Python control.
 
 Parity is pinned on one recorded Insatiable boss fight. Replay and stepping both match all 49 of the game's
@@ -71,7 +72,7 @@ dotnet/
   CombatWorker/      the JSON-lines worker: load / start / step, start_run / run_step
   ReplayCheck/       replays an .mcr and diffs every checksum
   StubAudit/         which Godot members sts2.dll needs that the stubs lack; rerun per game version
-sts2bridge/          Python client (worker.py), pinned fixtures, .spgn excerpter
+sts2bridge/          Python client (worker.py), pinned fixtures, .run chronology, .spgn excerpter
 tests/               the contract: replay 49/49, step 49/49, hand-played win, specs, runs
 fixtures/            the Insatiable fight: .mcr, .run, hand-win, .spgn excerpt
 agents/nn/           PPO on the Insatiable fight
