@@ -1,17 +1,9 @@
-"""How a run's play changed from one checkpoint to the next, on the recorded fight.
+"""Compare checkpoint play on the recorded fight and pinned winning line.
 
-    .venv/bin/python -m agents.nn.shift runs/seeds/snapshots/*.pt
-    .venv/bin/python -m agents.nn.shift runs/seeds/best.pt runs/seeds/ckpt.pt
-
-Two views per checkpoint, in the order given:
-
-- Its own greedy line on the recorded fight, one row per turn, with a * on turns that differ from the previous
-  checkpoint's. Lines diverge as soon as one card differs, so later turns are different fights.
-- A probe that doesn't diverge: the states along the pinned hand-played win, the same for every checkpoint. At
-  each of its decisions, the probability the policy gives the move that won, and its own top pick where that
-  differs. The per-turn number is the chance the policy plays that whole turn as the win did.
-
---json writes both views for a figure.
+Each checkpoint produces its own greedy trajectory and action probabilities along the
+same hand-played win. Greedy trajectories can diverge; the winning-line probe holds
+states fixed. Per-turn probabilities multiply the probabilities of the winning actions.
+--json exports both views. See agents/nn/README.md for commands.
 """
 
 import argparse

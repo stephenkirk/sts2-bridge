@@ -1,11 +1,9 @@
-"""A set transformer over the tokens of encode.py, with a pointer policy over the legal inputs and a value head.
+"""Set transformer with a pointer policy and value head.
 
-A token's embedding is the sum of its id, its small ids and its kind, a linear map of its numbers, and each
-displayed card number as its name's embedding scaled by the value. No positional encoding: the orb queue's order
-comes in as position ids, and everything else is a set.
-
-The policy scores each legal input from the tokens it points at (a card, a card and its target, or the global
-token for end turn) together with the global token. The value head reads the global token and the mean token.
+Token embeddings sum kind, IDs, numeric projections, and value-scaled dynamic-variable
+embeddings. Positions are encoded only through categorical IDs from encode.py.
+The policy reads action pointers and the global token; the value head reads the global
+token and mean token embedding.
 """
 
 import torch

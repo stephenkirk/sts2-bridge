@@ -7,3 +7,4 @@ __pycache__/
 /lib/
 /.venv/
 /agents/nn/runs/
+/agents/nn/bench/

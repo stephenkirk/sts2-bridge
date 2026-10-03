@@ -1,0 +1,39 @@
+{
+  "format_version": 1,
+  "id": "insatiable",
+  "hypothesis": "A damage objective on fresh shuffles can learn the matchup on a tricky encounter.",
+  "training": {
+    "train_on": "seeds",
+    "actors": 5,
+    "envs": 2,
+    "episodes": 240,
+    "lr": 0.0003,
+    "epochs": 3,
+    "minibatch": 512,
+    "clip": 0.2,
+    "lam": 0.95,
+    "vf": 0.5,
+    "ent": 0.01,
+    "d": 128,
+    "layers": 3,
+    "max_lag": 2,
+    "bucket": true,
+    "amp": "none",
+    "eval_every": 10,
+    "eval_sampled": 20,
+    "eval_prefix": "EVAL",
+    "pool": "insatiable",
+    "reward": "damage",
+    "turn_cost_hp": 0,
+    "hours": 2,
+    "eval_seeds": 100,
+    "extend_vocab": false
+  },
+  "required_inputs": [],
+  "comparison": {
+    "baseline": "initial snapshot",
+    "seed_prefix": "INSATIABLE-FINAL-NEW",
+    "seeds": 200,
+    "split": null
+  }
+}
