@@ -29,4 +29,4 @@ You can derive features such as expected block or lethal damage from the visible
 
 Known top-deck cards aren't tracked yet: sorting loses that information. Card descriptions
 or rule features could also help a policy work across decks; the neural example uses IDs
-and displayed numbers for one deck.
+and displayed numbers across its fight pools.

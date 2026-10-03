@@ -1,9 +1,16 @@
 # sts2-bridge
 
-Run Slay the Spire 2 headless and step through combats and whole runs from Python.
+A Python interface to Slay the Spire 2, built for my own game-agent experiments.
 
-The game's own `sts2.dll` runs against stubbed Godot, with Python supplying an action at each decision point.
-The rules stay; the clicking goes. This started as plumbing for my own game-agent experiments.
+The bridge runs the game's own `sts2.dll` headless against stubbed Godot. A .NET worker handles
+game execution; Python receives observations and available actions, supplies a choice, and advances
+to the next decision. You can control individual combats or a whole run, from map choices to fights
+and rewards.
+
+The repository includes a [greedy combat baseline](examples/basic_policy.py), an experimental
+[PPO combat agent](agents/nn/README.md) with training and evaluation tools and a live dashboard,
+and a [whole-run agent](agents/run/play_run.py) that combines combat search with preferences for
+choices outside combat. You can use these or bring your own policy.
 
 Ways in:
 
@@ -12,8 +19,9 @@ Ways in:
   with `python3 -m sts2bridge.chronology x.run` (`--format json|jsonl`; pure Python, no setup).
 - **New run**: start a whole run under Python control.
 
-Parity is pinned on one recorded Insatiable boss fight. Replay and stepping both match all 49 of the game's
-state checksums, and the tests keep checking.
+Parity is pinned on one recorded Insatiable boss fight: replay and stepping both match all 49 of
+the game's state checksums. Other encounters have smoke coverage. The [test notes](docs/combat-parity.md#checking-against-the-game)
+and [neural design notes](docs/nn-design.md) describe what's tested and what's experimental.
 
 Spirebird `.spgn` tapes are read-only here. `sts2bridge.spgn` excerpts a tape's last combat to JSON, and the
 tests use that excerpt as a second witness: Spirebird's 49 checksums must equal the game's. A tape can't be
@@ -75,7 +83,7 @@ dotnet/
 sts2bridge/          Python client (worker.py), pinned fixtures, .run chronology, .spgn excerpter
 tests/               the contract: replay 49/49, step 49/49, hand-played win, specs, runs
 fixtures/            the Insatiable fight: .mcr, .run, hand-win, .spgn excerpt
-agents/nn/           PPO on the Insatiable fight
+agents/nn/           PPO on starter, Insatiable, or reconstructed library fights
 agents/run/          whole-run player: search in combat, priors outside it
 docs/                how parity was established, what the policy is given, findings
 ```

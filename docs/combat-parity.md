@@ -69,20 +69,23 @@ with CombatWorker() as worker:
 ```
 
 `spec_from_run` takes the final deck, relics, and potions, with HP from entry to the last room.
-Keyword arguments override those values. A history file doesn't contain enough information to
-reconstruct the deck at every earlier floor.
+Keyword arguments override those values. Earlier decks require forward reconstruction of
+recorded mutations; see the [library curriculum](../agents/nn/README.md#library-curriculum)
+for its assumptions and rejected cases.
 
 You can also build a spec yourself: `character`, `ascension`, `seed`, `encounter`, an optional
-`act`, and `player` fields in the game's save format. Unspecified player fields keep their
-fresh-run defaults. `worker.catalog()` lists characters with their starting HP, and encounters with their room
-type, acts, and whether they are in an act's weak (opening hallway) pool. Unknown IDs are rejected.
+`act` (zero-based, inferred from the encounter when omitted), and `player` fields in the
+game's save format. Unspecified player fields keep their fresh-run defaults. Inventory is
+loaded directly, without repeating relic pickup effects. `worker.catalog()` lists starting HP
+and deck by character, the ascension that adds Ascender's Bane, and each encounter's room
+type, acts, and weak-pool membership. Unknown IDs are rejected.
 The same spec and seed reproduce the same fight. An optional `run` overlays run-level save fields
 the same way, such as `map_point_history`, which sets the floor an encounter seeds its monsters
 with; [Reconstructing a fight](reconstructing-fights.md) uses it to re-enter fights from real runs.
 With `STS2_DUMP` set in the worker's environment, each checkpoint also carries the game's text
 dump of the state it hashed.
 
-For training, `worker.start(spec, hashes=False, reuse_map=True)` plays the same fight for less.
+For training, `worker.start(spec, hashes=False, reuse_map=True)` skips hashing and caches the act map.
 `hashes=False` (also on `load`) leaves `state_hash` null and `checkpoints` empty, skipping a full-state
 serialisation per reply and per action; `reuse_map=True` generates the act's map once per spec rather
 than once per seed. To keep several workers busy from one thread, `send` to each, then `receive` from each
@@ -107,8 +110,9 @@ python3 -m agents.run.play_run --seed MYSEED --sims 0
 ```
 
 With `--sims 0` it uses a rollout policy. Search mode uses snapshot copies of the fight, which
-reveal future draws and rolls. The agent can read an optional priors export with `--priors`;
-without one, those preferences fall back to defaults.
+reveal future draws and rolls. Outside combat it follows an optional preferences file passed with
+`--priors`, rating cards, relics, and event options; the format is in `agents/run/priors.py`.
+Without one, it skips card rewards and buys no cards.
 
 `worker.run_trace_path` holds a JSONL trace of decisions and replies.
 `worker.run_combat_snapshot(path)` saves an `.mcr` that another worker can load from the fight's
@@ -116,7 +120,7 @@ opening position. It isn't a mid-fight save.
 
 ## Checking against the game
 
-I used the recorded Insatiable fight as the reference: Defect A10, seed `7TA07BQT5BSJ`, game
+The parity reference is the recorded Insatiable fight: Defect A10, seed `7TA07BQT5BSJ`, game
 v0.111.0. Both replaying the tape and sending its actions through `step` match all 49 of the
 game's checksums and the final state. Dropping one action makes the test diverge.
 
