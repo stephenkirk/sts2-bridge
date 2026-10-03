@@ -15,8 +15,8 @@ then a local search keeps the best line (the incumbent) and rolls out variations
 to a random cut and continuing with a randomised policy. Once a line wins, the search goes on until a patience budget
 passes without a better line, then the main run plays it. Fights the snapshot cannot re-enter (a fight started from inside an event) fall back to the rollout policy.
 
-Everything outside combat is a prior (``priors``): Spirebird A10 card Elo against the act's skip Elo for card
-rewards, shops and choices, and Codex A10 counts for relics, ancients and events.
+Everything outside combat follows a preferences file (``priors``): a card is taken when its score beats the act's
+skip score, and relics, Ancients, events and removals go to the best-rated option.
 """
 
 import argparse

@@ -1,12 +1,12 @@
 # Reconstructing a fight from a real run
 
-Notes from 2026-09-29, game v0.111.0. Each source gives a different fidelity.
+Tape reconstruction notes from 2026-09-29, game v0.111.0. Fidelity depends on the source.
 
 | Source | What you get |
 |---|---|
 | Hand-written spec | A representative fight: any deck, HP and seed you choose (`worker.catalog()` has starting HP). Not one you played. |
 | `.run` + `spec_from_run` | Your deck, relics and potions at the **end** of the run, and the HP you entered the last room with. Relic props (Fishing Rod's `CombatsSeen`, …) are end-of-run values too. |
-| `.run`, rewound | Deck and belt before every fight. Upgrades and removals aren't dated, so earlier floors are guesses. A draft lives outside the repo. |
+| `.run` + library reconstruction | Inferred decks from dated mutations and relic ownership before Act 1 fights. Entry HP/gold come from the prior node; relic props reset and the potion belt is empty. See the [library curriculum](../agents/nn/README.md#library-curriculum). |
 | `.run` + Spirebird tape | **The fight you played.** Same monsters, same draws, same state at every checkpoint. |
 | `.mcr` | Exact and loadable, but the game only keeps the latest one. |
 
@@ -41,7 +41,7 @@ Because of these lines, the hashes match only where no action has run yet.
 
 ## Open
 
-- Later floors: the RNG counters (`niche`, `monster_ai`, …) will have moved, and they need
-  pre-shuffle values. Not tried.
+- Later-floor tape reconstruction was not tested in this work. RNG counters (`niche`,
+  `monster_ai`, …) require pre-shuffle values.
 - The fixture seed `7TA07BQT5BSJ` gives the same weak-pool monsters on every floor. Five
-  other seeds don't. I haven't found out why.
+  other seeds don't. The cause is unresolved.

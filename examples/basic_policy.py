@@ -1,4 +1,4 @@
-"""A small greedy policy adapted from neows_ledger's combat rollout scorer.
+"""A small greedy combat policy.
 
 Run from the repository root: python3 -m examples.basic_policy
 Uses visible card numbers and enemy intents; ignores most card interactions.
