@@ -4,10 +4,8 @@ using MegaCrit.Sts2.Core.CardSelection;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Models;
 
-// What a card choice is for. The selector the game consults gets only the options and pick counts; the CardSelectCmd
-// method that asks for it knows the screen, the prompt the game would show (TO_DISCARD, HOLOGRAM.selectionScreenPrompt…)
-// and, for hand selections, the model that asked. A prefix on each method records them for the selector to take.
-// It only reads its arguments, so the fight plays the same.
+// Capture selection method, prompt key, and source before the selector receives options and pick counts.
+// Harmony prefixes read arguments without changing selection behavior.
 static class ChoiceContext
 {
     static bool _installed;
@@ -39,7 +37,7 @@ static class ChoiceContext
         _next = new Context(__originalMethod.Name, prompt, source);
     }
 
-    // The context of the choice being asked for now; each call to a CardSelectCmd method replaces it.
+    // Consume the latest context; each patched CardSelectCmd call replaces it.
     public static Context? Take()
     {
         Context? c = _next;

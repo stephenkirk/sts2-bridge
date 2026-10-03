@@ -49,8 +49,7 @@ sealed class CombatSession
     readonly RunState _run;
     readonly Player _me;
     readonly CallerSelector _selector = new();
-    // Off for training: no state hash per reply and no checksum after every action. Both serialise the whole combat
-    // state and neither feeds gameplay; parity checks need them on.
+    // Hashing serializes full combat state per reply and action; parity tests enable it, training skips it.
     bool _hashes = true;
     long _loadMs;
     readonly Dictionary<string, double> _loadPhases = new();
@@ -64,8 +63,7 @@ sealed class CombatSession
         _me = run.Players[0];
     }
 
-    // A continuous run owns the RunState and RunManager. Attach the proven combat input path without loading a
-    // save, cleaning up, or entering a debug room. The caller attaches before voting for its first combat node.
+    // Attach to the run's existing state before its first combat-node vote; do not reload or enter a debug room.
     public static CombatSession Attach(RunState run)
     {
         _selectorScope?.Dispose();
@@ -124,17 +122,10 @@ sealed class CombatSession
         }, (rm, run) => rm.LoadIntoLatestMapCoord(AbstractRoom.FromSerializable(save.PreFinishedRoom, run)));
     }
 
-    // Any fight: a spec's character, deck, relics, potions and HP against an encounter (see CombatSpec). The room is
-    // entered the way the game's `fight` console command and debug bootstrap enter one, minus their randomised
-    // encounter RNG: monsters are generated from the run seed, so a spec and seed always give the same fight.
-    //
-    // Unlike those, the run first stands on a node of the act's map, as every real fight does: game code reads
-    // RunState.CurrentMapPoint at combat start (Fur Coat's BeforeCombatStart dereferences it). The node is the first
-    // of the encounter's type that no relic has marked, so the fight is an ordinary one, not a Fur Coat node.
-    //
-    // With reuseMap, the act's map is generated once per spec (seed aside) and later starts load it the way a save does,
-    // since generating it is most of a start. The map has its own RNG stream (StandardActMap.CreateFor seeds
-    // "act_N_map"), so the fight a seed gives is unchanged; test_combat_spec checks that hash for hash.
+    // Enter through the game's debug room path, retaining seeded encounter RNG.
+    // Use an unmarked node of the encounter's type: Fur Coat reads CurrentMapPoint at combat start.
+    // reuseMap caches by spec without seed. Map generation uses a separate "act_N_map" RNG stream;
+    // test_combat_spec checks cached starts against normal starts at each combat hash.
     public static CombatSession Start(JsonObject spec, bool hashes = true, bool reuseMap = false)
     {
         var sw = Stopwatch.StartNew();

@@ -10,7 +10,7 @@
 //   {"cmd":"step","action":{...}}           play / end_turn / potion / choose; returns the next boundary
 //   {"cmd":"observe"}                       the current boundary again, without acting
 //   {"cmd":"tape","mcr":"<path>"}           the recorded inputs and checkpoints, decoded (no game state touched)
-//   {"cmd":"catalog"}                       the characters and encounters a spec can name
+//   {"cmd":"catalog"}                       the characters (with starting HP and deck) and encounters a spec can name
 //   {"cmd":"start_run","spec":{...}}       start a seeded native run (character, seed, ascension?, unlocks?)
 //   {"cmd":"run_step","action":{...}}     take the next run-level or combat decision
 //   {"cmd":"run_observe"}                   report the current run boundary again
