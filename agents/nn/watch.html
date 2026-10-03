@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Training run</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.viz-root {
+  color-scheme: light;
+  --surface-0: #f4f3f0; --surface-1: #fcfcfb; --hairline: #e3e2dd; --grid: #ecebe7;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8984;
+  --c-DEFECT: #2a78d6; --c-IRONCLAD: #eb6834; --c-NECROBINDER: #1baf7a; --c-REGENT: #eda100; --c-SILENT: #e87ba4;
+  --neutral: #2a78d6;
+  --seq-0: #cde2fb; --seq-1: #9ec5f4; --seq-2: #6da7ec; --seq-3: #3987e5; --seq-4: #256abf; --seq-5: #184f95; --seq-6: #0d366b;
+  --div-better: #2a78d6; --div-mid: #f0efec; --div-worse: #e34948;
+  --good: #008300; --bad: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --hairline: #2e2e2c; --grid: #262624;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #85847c;
+    --c-DEFECT: #3987e5; --c-IRONCLAD: #d95926; --c-NECROBINDER: #199e70; --c-REGENT: #c98500; --c-SILENT: #d55181;
+    --neutral: #3987e5; --good: #2fa52f; --bad: #e66767;
+    --div-better: #3987e5; --div-mid: #383835; --div-worse: #e66767;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.viz-root { color: var(--text-primary); background: var(--surface-0); min-height: 100vh; padding: 20px 24px 40px; max-width: 1400px; margin: 0 auto; }
+header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 4px; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; }
+h2 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+.sub { color: var(--text-secondary); font-size: 12px; margin: 0 0 10px; max-width: 80ch; }
+.lede { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; max-width: 110ch; }
+.status { color: var(--text-muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.status::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: 1px; }
+.status.down::before { background: var(--bad); }
+select { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 6px; padding: 4px 8px; }
+.card { background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.tile .label { color: var(--text-secondary); font-size: 12px; }
+.tile .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 2px 0; }
+.tile .value small { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.tile .note { color: var(--text-muted); font-size: 12px; }
+.multiples { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.pools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.health { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.panel h3 { font-size: 13px; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.panel .now { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.panel .why { color: var(--text-muted); font-size: 11px; margin: 0 0 4px; min-height: 2.8em; }
+.key { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+svg { display: block; width: 100%; overflow: visible; }
+svg text { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+svg text.region { font-size: 11px; fill: var(--text-secondary); }
+.legend { display: flex; gap: 16px; color: var(--text-secondary); font-size: 12px; margin: 4px 0 10px; flex-wrap: wrap; align-items: center; }
+.split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr); gap: 20px; align-items: start; }
+.verdict { font-size: 13px; color: var(--text-secondary); }
+.verdict .big { font-size: 22px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; display: block; margin: 8px 0 2px; }
+table { border-collapse: separate; border-spacing: 2px; width: 100%; font-variant-numeric: tabular-nums; }
+th { font-weight: 500; color: var(--text-secondary); font-size: 12px; text-align: left; padding: 4px 6px; }
+td { padding: 6px; font-size: 13px; }
+td.num, th.num { text-align: right; }
+td.cell { text-align: center; border-radius: 4px; cursor: default; }
+td.cell:hover { outline: 2px solid var(--text-primary); }
+.fights tr.row { cursor: pointer; }
+.fights tr.row:hover td { background: var(--grid); }
+.fights td { border-bottom: 1px solid var(--hairline); border-radius: 0; }
+.fights td.diff { border-radius: 4px; text-align: right; }
+.fights .deck td { color: var(--text-secondary); font-size: 12px; padding: 4px 6px 10px 22px; }
+.rematch td, .rematch th { border-bottom: 1px solid var(--hairline); border-radius: 0; }
+.better { color: var(--good); } .worse { color: var(--bad); }
+details { margin-top: 10px; } summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; }
+details.card { margin-top: 0; } details.card > summary { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.line { font-size: 12px; color: var(--text-secondary); margin: 6px 0 0; }
+.line b { color: var(--text-primary); font-weight: 600; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+.chip { font: inherit; font-size: 12px; border: 1px solid var(--hairline); background: var(--surface-1); color: var(--text-secondary); border-radius: 999px; padding: 3px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.chip[aria-pressed="true"] { border-color: var(--text-primary); color: var(--text-primary); font-weight: 600; }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 14px; }
+.bars h3 { font-size: 13px; margin: 0 0 2px; font-weight: 600; }
+.bars .why { color: var(--text-muted); font-size: 11px; margin: 0 0 8px; }
+.bar { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 6.5em; gap: 8px; align-items: center; font-size: 12px; padding: 2px 0; }
+.bar .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .track, .bar .fill { display: block; }
+.bar .track { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 4px; }
+.bar .n { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.badge { font-size: 9px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border-radius: 4px; padding: 1px 4px; margin-left: 4px; vertical-align: 1px; border: 1px solid currentColor; opacity: .85; }
+.collection h3 { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 12px 0 6px; display: flex; gap: 6px; align-items: center; }
+.cardgrid { display: flex; flex-wrap: wrap; gap: 4px; }
+.cardchip { font-size: 12px; border-radius: 6px; padding: 4px 8px; border: 1px solid var(--hairline); background: var(--surface-0); cursor: default; }
+.cardchip .count { opacity: .7; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.cardchip.dark { color: #ffffff; border-color: transparent; }
+.cardchip.light { color: #0b0b0b; border-color: transparent; }
+.cardchip.unplayed { border-style: dashed; color: var(--text-muted); }
+.scale { display: inline-flex; gap: 2px; vertical-align: middle; }
+.scale span { width: 16px; height: 10px; border-radius: 2px; }
+#tip { position: fixed; pointer-events: none; background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: none; z-index: 10; min-width: 140px; max-width: 320px; color: var(--text-primary); }
+#tip .head { color: var(--text-secondary); margin-bottom: 4px; }
+#tip .row { display: flex; align-items: center; gap: 6px; }
+#tip .row strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .multiples { grid-template-columns: repeat(3, 1fr); } .health { grid-template-columns: repeat(2, 1fr); } .split, .cols { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .viz-root { padding: 16px; } .multiples, .pools, .health { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <header>
+    <h1 id="title">Training run</h1>
+    <select id="run" aria-label="Run"></select>
+    <span class="status" id="status">loading…</span>
+  </header>
+  <p class="lede" id="lede"></p>
+  <div id="main">
+    <div class="tiles" id="tiles"></div>
+    <div class="card" id="duelCard" hidden>
+      <h2>You vs the network, fight by fight</h2>
+      <p class="sub" id="duelSub"></p>
+      <div class="split"><div id="duel"></div><div class="verdict" id="duelVerdict"></div></div>
+    </div>
+    <div class="card">
+      <h2>HP lost per test fight, by character</h2>
+      <p class="sub">Lower is better. Each point is one test of the network as it was then.</p>
+      <div class="legend" id="multiplesLegend"></div>
+      <div class="multiples" id="multiples"></div>
+    </div>
+    <div class="card" id="poolsCard" hidden>
+      <h2>By encounter type</h2>
+      <p class="sub">The game's own categories. Elites hit harder, so compare each line with your own record there, not with the other panels.</p>
+      <div class="pools" id="pools"></div>
+    </div>
+    <div class="card" id="cardsCard" hidden>
+      <h2>Cards</h2>
+      <p class="sub" id="cardsSub"></p>
+      <div class="chips" id="cardFilter"></div>
+      <div id="cards"></div>
+    </div>
+    <div class="card" id="rematchCard" hidden>
+      <h2>Your fights, replayed by the latest snapshot</h2>
+      <p class="sub">Same seed, monsters and draws as when you played them. This counts damage taken and ignores end-of-fight healing, so it isn't the HP lost used above.</p>
+      <div id="rematch"></div>
+    </div>
+    <div class="card">
+      <h2 id="heatTitle">Every test fight</h2>
+      <p class="sub" id="heatSub"></p>
+      <div id="heat"></div>
+    </div>
+    <div class="card">
+      <h2>Training health</h2>
+      <p class="sub">Signs the learning itself is going wrong, whatever the score says.</p>
+      <div class="health" id="health"></div>
+    </div>
+    <details class="card">
+      <summary>Run details</summary>
+      <div id="provenance"></div>
+    </details>
+  </div>
+</div>
+<div id="tip"></div>
+<script>
+const CHARS = ["DEFECT", "IRONCLAD", "NECROBINDER", "REGENT", "SILENT"];
+const POOLS = ["weak", "regular", "elite"];
+const title = c => c.split("_").map(w => w[0] + w.slice(1).toLowerCase()).join(" ");
+const encounter = e => title(e.replace(/_(WEAK|NORMAL|ELITE|BOSS)$/, ""));
+const css = v => getComputedStyle(document.querySelector(".viz-root")).getPropertyValue(v).trim();
+const fmt = (v, d = 1) => v == null || isNaN(v) ? "–" : Number(v).toFixed(d);
+const pct = v => v == null || isNaN(v) ? "–" : Math.round(v * 100) + "%";
+const signed = v => (v > 0 ? "+" : v < 0 ? "−" : "±") + fmt(Math.abs(v));
+const mean = xs => { xs = xs.filter(x => x != null && !isNaN(x)); return xs.length ? xs.reduce((a, b) => a + b) / xs.length : null; };
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(tag === "svg" || attrs._svg ? "http://www.w3.org/2000/svg" : "http://www.w3.org/1999/xhtml", tag);
+  for (const [k, v] of Object.entries(attrs)) if (k !== "_svg") e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const S = (tag, attrs, parent) => el(tag, { ...attrs, _svg: 1 }, parent);
+const text = (tag, s, parent, cls) => { const e = document.createElement(tag); e.textContent = s; if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; };
+const badge = (s, parent) => text("span", s, parent, "badge");
+const fightsFmt = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k fights" : n + " fights";
+const shortPath = p => p && p.replace(/^.*\/runs\//, "");
+// Blue where the network loses less HP than you, red where it loses more, gray when even. Full strength at `span` HP.
+const diverging = (delta, span = 8) => {
+  const t = Math.min(1, Math.abs(delta) / span), pole = delta < 0 ? "--div-better" : "--div-worse";
+  return { background: `color-mix(in oklab, var(${pole}) ${Math.round(t * 85)}%, var(--div-mid))`, dark: t > .55 };
+};
+const paint = (cell, delta) => { const t = diverging(delta); cell.style.background = t.background; cell.style.color = t.dark ? "#ffffff" : css("--text-primary"); };
+
+// ---- tooltip ----
+const tip = document.getElementById("tip");
+function showTip(ev, head, rows) {
+  tip.replaceChildren();
+  text("div", head, tip, "head");
+  for (const r of rows) {
+    const row = text("div", "", tip, "row");
+    if (r.color) { const k = text("span", "", row, "key"); k.style.borderColor = r.color; if (r.dash) k.style.borderTopStyle = r.dash; }
+    if (r.value != null) text("strong", r.value, row);
+    text("span", r.label, row).style.color = css("--text-secondary");
+  }
+  tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(ev.clientX + 14, innerWidth - w - 8) + "px";
+  tip.style.top = Math.min(ev.clientY + 14, innerHeight - h - 8) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+const hover = (node, head, rows) => {
+  node.addEventListener("pointermove", ev => showTip(ev, head, rows()));
+  node.addEventListener("pointerleave", hideTip);
+};
+
+// ---- a small line chart: series [{label, color, width, opacity, points:[[x,y]]}], refs [{y, label, dash}] ----
+function lineChart(parent, { series, refs = [], xFmt, yFmt = v => fmt(v), height = 150, yMin = 0, yMax }) {
+  const W = 300, H = height, L = 28, R = 8, T = 8, B = 18;
+  refs = refs.filter(r => r.y != null);
+  const xs = series.flatMap(s => s.points.map(p => p[0]));
+  const ys = series.flatMap(s => s.points.map(p => p[1])).concat(refs.map(r => r.y)).filter(v => v != null);
+  const x0 = Math.min(...xs, 0), x1 = Math.max(...xs, 1);
+  const bottom = Math.min(yMin, ...ys), top = yMax ?? Math.max(...ys, 1) * 1.1;
+  const X = x => L + (x - x0) / (x1 - x0 || 1) * (W - L - R), Y = y => T + (1 - (y - bottom) / (top - bottom || 1)) * (H - T - B);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, parent);
+  const clip = "c" + Math.random().toString(36).slice(2);
+  S("rect", { x: L, y: T, width: W - L - R, height: H - T - B }, S("clipPath", { id: clip }, S("defs", {}, svg)));
+  for (const f of [0, .5, 1]) {
+    const v = bottom + f * (top - bottom);
+    S("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), stroke: css("--grid"), "stroke-width": 1 }, svg);
+    S("text", { x: L - 4, y: Y(v) + 3, "text-anchor": "end" }, svg).textContent = yFmt(v);
+  }
+  S("text", { x: W - R, y: H - 4, "text-anchor": "end" }, svg).textContent = xFmt(x1);
+  S("text", { x: L, y: H - 4 }, svg).textContent = xFmt(x0);
+  for (const r of refs) {
+    if (r.y > top) continue;  // off the top of a chart scaled to the data; the panel's "now" line still says it
+    S("line", { x1: L, x2: W - R, y1: Y(r.y), y2: Y(r.y), stroke: r.color, "stroke-width": r.width || 1, "stroke-dasharray": r.dash }, svg);
+    S("text", { x: W - R, y: Y(r.y) - 3, "text-anchor": "end" }, svg).textContent = `${r.label} ${fmt(r.y)}`;
+  }
+  for (const s of series) {
+    const pts = s.points.filter(p => p[1] != null);
+    if (!pts.length) continue;
+    S("path", { "clip-path": `url(#${clip})`, d: pts.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1)).join(""), fill: "none",
+      stroke: s.color, "stroke-width": s.width || 2, opacity: s.opacity ?? 1, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    if (s.dot) { const p = pts[pts.length - 1]; S("circle", { cx: X(p[0]), cy: Y(p[1]), r: 4, fill: s.color, stroke: css("--surface-1"), "stroke-width": 2 }, svg); }
+  }
+  const hair = S("line", { y1: T, y2: H - B, stroke: css("--text-muted"), "stroke-width": 1, visibility: "hidden" }, svg);
+  const hit = S("rect", { x: L, y: 0, width: W - L - R, height: H, fill: "transparent" }, svg);
+  hit.addEventListener("pointermove", ev => {
+    const box = svg.getBoundingClientRect(), px = (ev.clientX - box.left) / box.width * W;
+    const xv = x0 + (px - L) / (W - L - R) * (x1 - x0);
+    const main = series[0].points.length ? series[0].points : series.find(s => s.points.length)?.points || [];
+    if (!main.length) return;
+    const near = main.reduce((a, p) => Math.abs(p[0] - xv) < Math.abs(a[0] - xv) ? p : a);
+    hair.setAttribute("x1", X(near[0])); hair.setAttribute("x2", X(near[0])); hair.setAttribute("visibility", "visible");
+    const rows = series.map(s => {
+      if (!s.points.length) return null;
+      const q = s.points.reduce((a, p) => Math.abs(p[0] - near[0]) < Math.abs(a[0] - near[0]) ? p : a);
+      return { value: yFmt(q[1]), label: s.label, color: s.color };
+    }).filter(Boolean).concat(refs.map(r => ({ value: fmt(r.y), label: r.label, color: r.color, dash: "dashed" })));
+    showTip(ev, xFmt(near[0]), rows);
+  });
+  hit.addEventListener("pointerleave", () => { hair.setAttribute("visibility", "hidden"); hideTip(); });
+}
+
+// ---- what the page compares against ----
+const latest = d => d.evals[d.evals.length - 1];
+const isLibrary = d => d.metadata?.pool === "library";
+const scenarios = d => d.library?.scenarios || {};
+// Your HP lost on the same fights, filtered by character or encounter type. The starter pool only has your averages.
+function yours(d, keep = () => true) {
+  if (!isLibrary(d)) return mean(CHARS.filter(c => keep({ char: c })).map(c => d.baselines[c].you));
+  return mean(Object.values(scenarios(d)).filter(s => s.you && keep(s)).map(s => s.you.hp_change));
+}
+// Each validation fight with both results; "better" and "worse" need half an HP of daylight.
+function duels(d) {
+  const ev = latest(d);
+  if (!ev) return [];
+  return Object.entries(scenarios(d)).filter(([name, s]) => s.you && ev.by_fight[name]).map(([name, s]) => {
+    const net = ev.by_fight[name], delta = net.lost - s.you.hp_change;
+    return { name, s, net, delta, verdict: delta <= -.5 ? "better" : delta >= .5 ? "worse" : "even" };
+  });
+}
+// The test best.pt keeps: the highest reward, the latest on a tie.
+const bestEval = d => d.evals.reduce((b, e) => e.reward != null && (!b || e.reward >= b.reward) ? e : b, null);
+
+// ---- header and tiles ----
+function header(d) {
+  const m = d.metadata || {}, init = m.initialization || {};
+  document.getElementById("title").textContent = d.run;
+  document.title = `${d.run} · training`;
+  const start = { fresh: "Fresh weights", branch: `Branched from ${shortPath(init.checkpoint)}`, resume: "Resumed" }[init.mode] || "Start not recorded";
+  const pool = isLibrary(d)
+    ? `trains on ${d.library?.loadouts ?? "?"} decks from your runs, tested on ${Object.keys(scenarios(d)).length} fights from other runs`
+    : m.pool === "starter" ? "starter decks vs act 1's weak fights" : `${m.pool || "unknown"} pool`;
+  const reward = m.reward === "hp" ? `HP reward${m.turn_cost_hp ? `, ${fmt(m.turn_cost_hp, 2)} HP per turn` : ""}` : `${m.reward || "unknown"} reward`;
+  document.getElementById("lede").textContent = `${start} · ${pool} · ${reward}. ` +
+    `Test fights use the network's top-ranked move on ${m.eval_seeds || "fixed"} seeds per fight that it never trains on. ` +
+    "HP lost is HP going in minus HP coming out, so healing counts.";
+}
+
+function tiles(d) {
+  const box = document.getElementById("tiles"); box.replaceChildren();
+  const last = d.rows[d.rows.length - 1], ev = latest(d), best = bestEval(d);
+  const tile = (label, value, note, unit) => {
+    const t = text("div", "", box, "card tile");
+    text("div", label, t, "label");
+    const v = text("div", value, t, "value"); if (unit) text("small", " " + unit, v);
+    text("div", note, t, "note");
+  };
+  if (isLibrary(d)) {
+    const ds = duels(d), n = k => ds.filter(x => x.verdict === k).length;
+    tile("Beats you on", ev ? String(n("better")) : "–",
+      ev ? `by half an HP or more · you win ${n("worse")} · ${n("even")} even` : "waiting for the first test", ev ? `of ${ds.length} fights` : "");
+  }
+  tile("HP lost per test fight", fmt(ev && mean(Object.values(ev.by_char))), ev ? `you ${fmt(yours(d))}` + (isLibrary(d) ? " on the same fights" :
+    ` · random play ${fmt(mean(CHARS.map(c => d.baselines[c].spend)))}`) : "waiting for the first test");
+  const yourRuns = isLibrary(d) ? Object.values(scenarios(d)).filter(s => s.you) : [];
+  tile("Wins", ev ? pct(ev.win_total) : "–", ev ? `${ev.timeouts ?? 0} ran past turn 30` +
+    (yourRuns.length ? ` · you won ${yourRuns.filter(s => s.you.won).length} of ${yourRuns.length}` : "") : "");
+  tile("Best test", best ? fmt(mean(Object.values(best.by_char))) : "–", best ? `HP lost, at ${fightsFmt(best.fights)} · saved as best.pt` : "");
+  tile("Trained on", last ? fightsFmt(last.fights).replace(" fights", "") : "–",
+    last ? `${fmt(last.min, 0)} min · ${last.fps ? fmt(last.fps, 0) + " fights/s" : "warming up"}` : "", "fights");
+  if (d.rematch) {
+    const snaps = d.rematch.snapshots, rm = snaps[snaps.length - 1];
+    tile("Your fights, damage taken", rm ? String(rm.fights.reduce((a, f) => a + f.lost, 0)) : "–",
+      `you ${d.rematch.fights.reduce((a, f) => a + f.you.lost, 0)}` + (rm ? ` · snapshot at ${fightsFmt(rm.fights_played || 0)}` : " · waiting for a snapshot"));
+  }
+}
+
+// ---- you vs the network: one dot per validation fight ----
+function duel(d) {
+  const card = document.getElementById("duelCard");
+  card.hidden = !isLibrary(d);
+  if (card.hidden) return;
+  const box = document.getElementById("duel"), side = document.getElementById("duelVerdict");
+  box.replaceChildren(); side.replaceChildren();
+  const ev = latest(d), ds = duels(d);
+  document.getElementById("duelSub").textContent = ev
+    ? `Each dot is a validation fight, tested at ${fightsFmt(ev.fights)}. Across: the HP you lost in the real run. Up: the HP the network loses, on average. ` +
+      "Below the diagonal, it did better. You had your potions and one draw; it has no potions and plays several seeds."
+    : "Waiting for the first test.";
+  if (!ds.length) return;
+  const W = 640, H = 360, L = 36, R = 12, T = 12, B = 30;
+  const vals = ds.flatMap(x => [x.s.you.hp_change, x.net.lost]);
+  const lo = Math.min(0, ...vals), hi = Math.max(...vals, 5) * 1.05;
+  const X = v => L + (v - lo) / (hi - lo) * (W - L - R), Y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Your HP lost against the network's, per fight" }, box);
+  const step = hi > 40 ? 10 : 5;
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    S("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), stroke: css("--grid") }, svg);
+    S("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, stroke: css("--grid") }, svg);
+    S("text", { x: L - 5, y: Y(v) + 3, "text-anchor": "end" }, svg).textContent = v;
+    S("text", { x: X(v), y: H - B + 13, "text-anchor": "middle" }, svg).textContent = v;
+  }
+  S("text", { x: W - R, y: H - 2, "text-anchor": "end" }, svg).textContent = "your HP lost →";
+  S("text", { x: L + 4, y: T + 10 }, svg).textContent = "↑ network's HP lost";
+  S("line", { x1: X(lo), y1: Y(lo), x2: X(hi), y2: Y(hi), stroke: css("--text-muted"), "stroke-dasharray": "4 3" }, svg);
+  S("text", { x: X(hi * .7) + 10, y: Y(hi * .7) + 22, class: "region" }, svg).textContent = "network did better";
+  S("text", { x: X(hi * .3) - 10, y: Y(hi * .3) - 14, class: "region", "text-anchor": "end" }, svg).textContent = "you did better";
+  // Big differences drawn last, so they sit on top of the crowd near the diagonal.
+  for (const x of ds.slice().sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))) {
+    const g = S("g", {}, svg), cx = X(x.s.you.hp_change), cy = Y(x.net.lost);
+    S("circle", { cx, cy, r: 5, fill: css("--c-" + x.s.char), stroke: css("--surface-1"), "stroke-width": 2 }, g);
+    if (x.net.win < 1) S("circle", { cx, cy, r: 8.5, fill: "none", stroke: css("--bad"), "stroke-width": 1.5 }, g);
+    hover(S("circle", { cx, cy, r: 10, fill: "transparent" }, g), `${title(x.s.char)} vs ${encounter(x.s.encounter)} · floor ${x.s.floor} · ${x.s.pool}`, () => [
+      { value: `${x.s.you.hp_change} HP`, label: `you, ${x.s.you.turns ?? "?"} turns${x.s.you.won ? "" : ", lost"}` },
+      { value: `${fmt(x.net.lost)} HP`, label: `network, ${pct(x.net.win)} won` },
+      { value: signed(x.delta), label: { better: "network better", worse: "you better", even: "about even" }[x.verdict] },
+      { label: `entered at ${x.s.hp}/${x.s.max_hp} HP with ${x.s.deck.length} cards` },
+    ]);
+  }
+  const n = k => ds.filter(x => x.verdict === k).length;
+  text("span", `${n("better")} of ${ds.length}`, side, "big");
+  text("div", "fights where the network loses at least half an HP less than you did.", side);
+  text("span", signed(mean(ds.map(x => x.delta))), side, "big");
+  text("div", "HP per fight compared with you, on average. Below zero, it loses less.", side);
+  const worst = ds.slice().sort((a, b) => b.delta - a.delta)[0];
+  if (worst.delta > 0) {
+    text("span", encounter(worst.s.encounter), side, "big");
+    text("div", `is where it's furthest behind: ${fmt(worst.net.lost)} HP against your ${worst.s.you.hp_change}, as ${title(worst.s.char)} on floor ${worst.s.floor}.`, side);
+  }
+  const legend = text("div", "", side, "legend"); legend.style.marginTop = "14px";
+  for (const c of CHARS) { const s = text("span", "", legend); text("span", "", s, "dot").style.background = css("--c-" + c); s.append(" " + title(c)); }
+  const ring = text("span", "", legend); text("span", "", ring, "dot").style.border = `1.5px solid ${css("--bad")}`; ring.append(" network lost on a seed");
+}
+
+// ---- per character ----
+function multiples(d) {
+  const legend = document.getElementById("multiplesLegend"); legend.replaceChildren();
+  const key = (label, style) => { const s = text("span", "", legend); Object.assign(text("span", "", s, "key").style, style); s.append(" " + label); };
+  key("test fights, top-ranked move", { borderColor: css("--text-secondary") });
+  key("training fights, sampled", { borderColor: css("--text-muted"), opacity: .5, borderTopWidth: "1px" });
+  key(isLibrary(d) ? "you, on the same fights" : "you, first fight of 210 runs", { borderTop: `2px dotted ${css("--text-secondary")}` });
+  if (!isLibrary(d)) key("random play", { borderTop: `1px dashed ${css("--text-muted")}` });
+  const box = document.getElementById("multiples"); box.replaceChildren();
+  const ev = latest(d);
+  for (const c of CHARS) {
+    const color = css("--c-" + c), p = text("div", "", box, "panel");
+    const h = text("h3", "", p); text("span", "", h, "key").style.borderColor = color; text("span", title(c), h);
+    const you = yours(d, s => s.char === c), spend = isLibrary(d) ? null : d.baselines[c].spend;
+    text("div", ev ? `now ${fmt(ev.by_char[c])} · you ${fmt(you)}` + (ev.win?.[c] < 1 ? ` · ${pct(ev.win[c])} won` : "") : "no test yet", p, "now");
+    // Scaled to the network and you, where the differences are; random play is far above and drawn only if it fits.
+    const points = d.evals.map(e => e.by_char[c]).concat(d.rows.map(r => r.train[c]), [you]).filter(v => v != null);
+    lineChart(p, {
+      series: [
+        { label: "test fights", color, width: 2, dot: true, points: d.evals.map(e => [e.fights, e.by_char[c]]) },
+        { label: "training fights", color, width: 1, opacity: .35, points: d.rows.map(r => [r.fights, r.train[c]]) },
+      ],
+      refs: [
+        { y: you, label: "you", color: css("--text-secondary"), dash: "1.5 2.5", width: 2 },
+        { y: spend, label: "random", color: css("--text-muted"), dash: "4 3" },
+      ],
+      xFmt: fightsFmt, yFmt: v => fmt(v, 0), yMax: Math.max(4, ...points) * 1.15,
+    });
+  }
+}
+
+// ---- weak, regular, elite ----
+function pools(d) {
+  const ev = latest(d), card = document.getElementById("poolsCard");
+  card.hidden = !ev?.by_pool || !Object.keys(ev.by_pool).length;
+  if (card.hidden) return;
+  const box = document.getElementById("pools"); box.replaceChildren();
+  const color = css("--neutral");
+  for (const pool of POOLS.filter(k => ev.by_pool[k])) {
+    const p = text("div", "", box, "panel"), now = ev.by_pool[pool], you = yours(d, s => s.pool === pool);
+    text("h3", `${title(pool)} · ${now.n / (d.metadata?.eval_seeds || 1)} fights`, p);
+    text("div", `now ${fmt(now.lost)} · you ${fmt(you)} · ${pct(now.win)} won`, p, "now");
+    const pts = d.evals.filter(e => e.by_pool?.[pool]).map(e => [e.fights, e.by_pool[pool].lost]);
+    lineChart(p, { series: [{ label: title(pool), color, width: 2, dot: true, points: pts }],
+      refs: [{ y: you, label: "you", color: css("--text-secondary"), dash: "1.5 2.5", width: 2 }],
+      xFmt: fightsFmt, yFmt: v => fmt(v, 0), height: 130, yMax: Math.max(4, you ?? 0, ...pts.map(q => q[1])) * 1.15 });
+  }
+}
+
+// ---- cards ----
+let cardChar = "ALL";
+function cards(d) {
+  const ev = latest(d), lib = d.library, card = document.getElementById("cardsCard");
+  const played = ev?.cards;
+  card.hidden = !played && !lib;
+  if (card.hidden) return;
+  const all = lib?.cards || {};
+  const count = f => Object.values(all).filter(f).length;
+  document.getElementById("cardsSub").textContent = lib
+    ? `${Object.keys(all).length} different cards across ${lib.loadouts} training decks. ` +
+      (lib.vocab_known ? `${count(c => c.new)} are new: the network had never seen them before this run. ` : "") +
+      (count(c => !c.trained) ? `${count(c => !c.trained)} only turn up in test decks, so it meets them cold.` : "")
+    : "How the network plays the cards it has.";
+
+  const filter = document.getElementById("cardFilter"); filter.replaceChildren();
+  for (const c of ["ALL", ...CHARS]) {
+    const b = text("button", "", filter, "chip");
+    if (c !== "ALL") text("span", "", b, "dot").style.background = css("--c-" + c);
+    b.append(c === "ALL" ? "All characters" : title(c));
+    b.setAttribute("aria-pressed", c === cardChar);
+    b.onclick = () => { cardChar = c; cards(d); };
+  }
+  // Offered: test decisions where some copy was playable. Played: the decisions where one was.
+  const stats = {};
+  for (const [c, byCard] of Object.entries(played || {})) {
+    if (cardChar !== "ALL" && c !== cardChar) continue;
+    for (const [id, [offered, n]] of Object.entries(byCard)) {
+      const s = stats[id.split(".").pop()] ||= { offered: 0, played: 0 };
+      s.offered += offered; s.played += n;
+    }
+  }
+  const box = document.getElementById("cards"); box.replaceChildren();
+  const rated = Object.entries(stats).filter(([, s]) => s.offered >= 20).map(([k, s]) => ({ k, rate: s.played / s.offered, ...s }));
+  if (rated.length) {
+    const cols = text("div", "", box, "cols");
+    const list = (head, why, rows, color) => {
+      const b = text("div", "", cols, "bars"); text("h3", head, b); text("p", why, b, "why");
+      for (const r of rows) {
+        const row = text("div", "", b, "bar"), name = text("span", title(r.k), row, "name");
+        if (all[r.k]?.new) badge("new", name);
+        const fill = text("span", "", text("span", "", row, "track"), "fill");
+        fill.style.width = (r.rate * 100).toFixed(1) + "%"; fill.style.background = color;
+        text("span", `${pct(r.rate)} of ${r.offered}`, row, "n");
+      }
+    };
+    rated.sort((a, b) => b.rate - a.rate || b.offered - a.offered);
+    list("Favourites", "Played most often when playable, in the latest test. Cards playable fewer than 20 times are left out.",
+      rated.slice(0, 8), css("--neutral"));
+    list("Held back", "Playable, but mostly left in hand. Fine for a Defend with nothing to block; odd for most else.",
+      rated.slice(-8).reverse(), css("--text-muted"));
+  }
+  if (!lib) return;
+  const coll = text("div", "", box, "collection");
+  const head = text("div", "", coll, "legend");
+  head.append("Shade: how often it's played when playable, ");
+  const scale = text("span", "", head, "scale");
+  for (let i = 0; i <= 6; i++) text("span", "", scale).style.background = css("--seq-" + i);
+  head.append(" 0% to 100%. Dashed: never playable in the latest test. Number: training decks holding it.");
+  const groups = {};
+  for (const [k, c] of Object.entries(all)) {
+    if (cardChar !== "ALL" && !c.chars.includes(cardChar)) continue;
+    (groups[c.chars.length === 1 ? c.chars[0] : "SHARED"] ||= []).push([k, c]);
+  }
+  for (const owner of [...CHARS, "SHARED"].filter(o => groups[o])) {
+    const h = text("h3", "", coll);
+    if (owner !== "SHARED") text("span", "", h, "dot").style.background = css("--c-" + owner);
+    h.append(owner === "SHARED" ? "In more than one character's decks" : title(owner));
+    const grid = text("div", "", coll, "cardgrid");
+    for (const [k, c] of groups[owner].sort((a, b) => b[1].decks - a[1].decks || a[0].localeCompare(b[0]))) {
+      const s = stats[k], chip = text("span", title(k), grid, "cardchip");
+      text("span", c.decks, chip, "count");
+      if (c.new) badge("new", chip);
+      if (!c.trained) badge("test only", chip);
+      if (s?.offered) {
+        const step = Math.min(6, Math.floor(s.played / s.offered * 7));
+        chip.style.background = css("--seq-" + step); chip.classList.add(step >= 3 ? "dark" : "light");
+      } else if (played) chip.classList.add("unplayed");
+      hover(chip, title(k), () => [
+        { value: c.decks, label: "training decks hold it" },
+        s?.offered ? { value: pct(s.played / s.offered), label: `played when playable (${s.played} of ${s.offered})` } : { label: "never playable in the latest test" },
+        { label: c.new ? "new to the network this run" : c.trained ? "known from earlier training" : "only in test decks" },
+      ]);
+    }
+  }
+}
+
+// ---- every fight ----
+function heat(d) {
+  const box = document.getElementById("heat"); box.replaceChildren();
+  const ev = latest(d), sub = document.getElementById("heatSub");
+  document.getElementById("heatTitle").textContent = "Every test fight";
+  if (!ev || !Object.keys(ev.by_fight).length) { sub.textContent = "Waiting for the first test."; return; }
+  if (isLibrary(d)) return fightTable(d, box, sub, ev);
+  sub.textContent = `HP lost per fight, tested at ${fightsFmt(ev.fights)}. Blue is better than your average first fight as that character; red is worse.`;
+  const encs = [...new Set(Object.keys(ev.by_fight).map(k => k.split("/")[1]))];
+  const table = text("table", "", box), head = text("tr", "", table);
+  text("th", "", head);
+  for (const e of encs) text("th", encounter(e), head);
+  for (const c of CHARS) {
+    const tr = text("tr", "", table); text("th", title(c), tr);
+    for (const e of encs) {
+      const f = ev.by_fight[`${c}/${e}`], td = text("td", f ? fmt(f.lost) : "–", tr, "cell");
+      if (!f) continue;
+      paint(td, f.lost - d.baselines[c].you);
+      hover(td, `${title(c)} vs ${encounter(e)}`, () =>
+        [{ value: fmt(f.lost), label: "HP lost" }, { value: fmt(d.baselines[c].you), label: "your average first fight" }, { value: pct(f.win), label: "won" }]);
+    }
+  }
+}
+
+const openFights = new Set();
+let fightSort = "delta";
+function fightTable(d, box, sub, ev) {
+  document.getElementById("heatTitle").textContent = "Every validation fight";
+  sub.textContent = `Tested at ${fightsFmt(ev.fights)}. Difference is the network's HP lost minus yours: blue, it did better; red, you did. Click a column to sort, a row for the deck.`;
+  const rows = Object.entries(ev.by_fight).map(([name, net]) => {
+    const s = scenarios(d)[name], you = s?.you?.hp_change;
+    return { name, s, net, you, delta: you == null ? null : net.lost - you };
+  });
+  const sorts = { delta: (a, b) => (b.delta ?? -1e9) - (a.delta ?? -1e9), floor: (a, b) => (a.s?.floor ?? 0) - (b.s?.floor ?? 0),
+                  lost: (a, b) => b.net.lost - a.net.lost, win: (a, b) => a.net.win - b.net.win };
+  rows.sort(sorts[fightSort]);
+  const table = text("table", "", box, "fights"), head = text("tr", "", table);
+  const th = (label, sort, cls) => {
+    const h = text("th", label + (sort === fightSort ? " ↓" : ""), head, cls);
+    if (sort) { h.style.cursor = "pointer"; h.onclick = () => { fightSort = sort; heat(d); }; }
+  };
+  th("Fight"); th("Floor", "floor", "num"); th("Type"); th("You", null, "num"); th("Network", "lost", "num"); th("Difference", "delta", "num"); th("Won", "win", "num");
+  for (const r of rows) {
+    const tr = text("tr", "", table, "row"), s = r.s, name = text("td", "", tr);
+    if (s) { text("span", "", name, "dot").style.background = css("--c-" + s.char); name.append(` ${title(s.char)} vs ${encounter(s.encounter)}`); }
+    else name.textContent = r.name;
+    text("td", s?.floor ?? "–", tr, "num");
+    text("td", s?.pool ?? "–", tr);
+    text("td", r.you == null ? "–" : r.you + (s.you.won ? "" : " †"), tr, "num");
+    text("td", fmt(r.net.lost), tr, "num");
+    const diff = text("td", r.delta == null ? "–" : signed(r.delta), tr, "diff num");
+    if (r.delta != null) paint(diff, r.delta);
+    text("td", pct(r.net.win), tr, "num");
+    tr.onclick = () => { openFights.has(r.name) ? openFights.delete(r.name) : openFights.add(r.name); heat(d); };
+    if (s && openFights.has(r.name)) {
+      const deck = text("td", "", text("tr", "", table, "deck"));
+      deck.colSpan = 7;
+      const counts = {};
+      for (const c of s.deck) counts[c] = (counts[c] || 0) + 1;
+      deck.textContent = `Entered at ${s.hp}/${s.max_hp} HP with ${s.deck.length} cards: ` +
+        Object.entries(counts).map(([c, n]) => title(c.replace(/\+$/, "")) + (c.endsWith("+") ? "+" : "") + (n > 1 ? ` ×${n}` : "")).join(", ") +
+        (s.relics.length ? `. Relics: ${s.relics.map(title).join(", ")}` : "") +
+        `. You ${s.you?.won ? "won" : "lost"} this fight in ${s.you?.turns ?? "?"} turns; the run was ${s.outcome === "win" ? "won" : s.outcome === "loss" ? "lost" : s.outcome}.`;
+    }
+  }
+  if (rows.some(r => r.s?.you && !r.s.you.won)) text("p", "† you lost this fight in the real run.", box, "sub").style.marginTop = "8px";
+}
+
+// ---- rematch ----
+const openTurns = { rematch: false };
+function rematch(d) {
+  const card = document.getElementById("rematchCard"), box = document.getElementById("rematch");
+  card.hidden = !d.rematch;
+  if (card.hidden) return;
+  box.replaceChildren();
+  const snaps = d.rematch.snapshots, rm = snaps[snaps.length - 1];
+  const table = text("table", "", box, "rematch"), head = text("tr", "", table);
+  for (const h of ["Fight", "You", "Latest snapshot", "Across snapshots"]) text("th", h, head);
+  d.rematch.fights.forEach((f, i) => {
+    const tr = text("tr", "", table);
+    text("td", f.name, tr);
+    text("td", `${f.you.lost} HP, ${f.you.turns} turns`, tr);
+    const r = rm?.fights[i];
+    const cell = text("td", r ? `${r.lost} HP, ${r.turns} turns${r.won ? "" : " (lost)"}` : "waiting…", tr);
+    if (r) cell.className = r.lost <= f.you.lost ? "better" : "worse";
+    const spark = text("td", "", tr); spark.style.width = "220px";
+    if (snaps.length) lineChart(spark, {
+      series: [{ label: "network", color: css("--c-" + f.char), width: 2, dot: true, points: snaps.map(s => [s.fights_played || 0, s.fights[i].lost]) }],
+      refs: [{ y: f.you.lost, label: "you", color: css("--text-secondary"), dash: "1.5 2.5", width: 2 }],
+      xFmt: fightsFmt, yFmt: v => fmt(v, 0), height: 60, yMax: Math.max(10, ...snaps.map(s => s.fights[i].lost)) * 1.1,
+    });
+  });
+  if (!rm) return;
+  const det = text("details", "", box);
+  det.open = openTurns.rematch;
+  det.addEventListener("toggle", () => { openTurns.rematch = det.open; });
+  text("summary", `Turn by turn, snapshot at ${fightsFmt(rm.fights_played || 0)}`, det);
+  rm.fights.forEach((r, i) => {
+    text("p", "", det, "line").append(Object.assign(document.createElement("b"), { textContent: d.rematch.fights[i].name }));
+    for (const t of r.line) text("p", `Turn ${t.turn} (${t.hp} HP): ${t.plays.join(", ") || "end turn"}`, det, "line");
+  });
+}
+
+// ---- health ----
+function health(d) {
+  const box = document.getElementById("health"); box.replaceChildren();
+  const color = css("--neutral"), last = d.rows[d.rows.length - 1];
+  const charts = [
+    ["Fights per second", "fps", 0, "All actors together. A drop usually means the machine is busy with something else."],
+    ["Policy entropy", "entropy", 2, "How spread out its choices are. A sudden fall means it stopped exploring."],
+    ["Value loss", "vloss", 4, "How far off its forecasts of HP still to lose are. Should stay small and level."],
+    ["Dropped fights per update", "dropped", 0, "Played by weights too many updates old to learn from, so thrown away."],
+  ];
+  for (const [label, key, dp, why] of charts) {
+    const p = text("div", "", box, "panel"); text("h3", label, p);
+    text("p", why, p, "why");
+    text("div", last ? `now ${fmt(last[key], dp)}` : "", p, "now");
+    lineChart(p, { series: [{ label, color, width: 2, points: d.rows.filter(r => r[key] != null).map(r => [r.fights, r[key]]) }],
+      xFmt: fightsFmt, yFmt: v => fmt(v, dp), height: 110 });
+  }
+}
+
+function provenance(d) {
+  const box = document.getElementById("provenance"); box.replaceChildren();
+  const m = d.metadata || {}, init = m.initialization || {};
+  const row = (k, v) => {
+    if (v == null || v === "") return;
+    const p = text("p", "", box, "line");
+    p.append(Object.assign(document.createElement("b"), { textContent: k + ": " }), v);
+  };
+  row("Started from", { fresh: "fresh random weights", branch: "trained weights, with a fresh optimizer and counters from zero",
+                        resume: "this run's own checkpoint, optimizer included" }[init.mode] || "not recorded");
+  row("Checkpoint", init.checkpoint && shortPath(init.checkpoint) +
+    (init.iteration != null ? ` (iteration ${init.iteration}${init.episodes ? ", " + fightsFmt(init.episodes) : ""})` : ""));
+  if (init.mode === "resume") row("Originally from", shortPath(m.origin_checkpoint));
+  row("Fight pool", m.pool);
+  row("Reward", m.reward && m.reward + (m.reward === "hp" ? `, charging ${fmt(m.turn_cost_hp, 2)} HP per turn` : ""));
+  row("Test seeds", m.eval_seeds ? `${m.eval_prefix}-0 to ${m.eval_prefix}-${m.eval_seeds - 1}` : m.eval_prefix);
+  row("Sessions", m.sessions);
+  if (d.library?.vocab_known) row("Vocabulary", `${Object.values(d.library.cards).filter(c => c.new).length} new card IDs added for this run`);
+  row("Older runs", "Runs from before HP change was logged count a lost fight as losing all the HP it started with.");
+}
+
+// Rebuild a section only when what it draws has changed, so hovering, open rows and filters survive the refresh.
+const drawn = {};
+function section(name, key, fn, d) {
+  const k = JSON.stringify(key);
+  if (drawn[name] === k) return;
+  drawn[name] = k;
+  fn(d);
+}
+
+let current = new URLSearchParams(location.search).get("run"), runsKey = "";
+async function refresh() {
+  const sel = document.getElementById("run"), status = document.getElementById("status");
+  try {
+    const res = await fetch("/data" + (current ? "?run=" + encodeURIComponent(current) : ""));
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const d = await res.json();
+    current = d.run;
+    if (runsKey !== d.runs.join() + "|" + d.run) {
+      runsKey = d.runs.join() + "|" + d.run;
+      sel.replaceChildren(...d.runs.map(r => Object.assign(document.createElement("option"), { value: r, textContent: r, selected: r === d.run })));
+    }
+    const rows = d.rows.length, evals = d.evals.length, rm = d.rematch?.snapshots.length;
+    section("header", [d.run, d.metadata, d.library?.loadouts], header, d);
+    section("tiles", [d.run, rows, evals, rm], tiles, d);
+    section("duel", [d.run, evals], duel, d);
+    section("multiples", [d.run, rows, evals], multiples, d);
+    section("pools", [d.run, evals], pools, d);
+    section("cards", [d.run, evals, cardChar], cards, d);
+    section("rematch", [d.run, rm], rematch, d);
+    section("heat", [d.run, evals, fightSort, [...openFights]], heat, d);
+    section("health", [d.run, rows], health, d);
+    section("provenance", [d.run, d.metadata, d.library?.vocab_known], provenance, d);
+    const ev = latest(d);
+    status.className = "status";
+    status.textContent = (ev ? `last test at ${fightsFmt(ev.fights)} · ` : "") + `updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    status.className = "status down";
+    status.textContent = "can't reach the watcher: " + e.message;
+  }
+}
+document.getElementById("run").addEventListener("change", e => {
+  current = e.target.value;
+  history.replaceState(null, "", "?run=" + encodeURIComponent(current));
+  refresh();
+});
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
