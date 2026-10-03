@@ -1,22 +1,9 @@
-"""Python side of the combat worker: start it once, load combats, step them one chosen input at a time.
+"""JSON-lines client for combat stepping and whole runs.
 
-    with CombatWorker() as w:
-        s = w.load(MCR)                        # first decision boundary of the recorded fight
-        # or: s = w.start(spec_from_run(run, "ENCOUNTER.X", seed="ANY"))   any deck against any fight
-        while s["boundary"] != "terminal":
-            s = w.step(pick(s["legal"]))       # any entry of s["legal"], or a choose with picks
-
-Every reply carries ``boundary`` (awaiting_input, awaiting_choice or terminal), ``obs``, ``legal``, ``choice``
-(options when a choice is pending), ``state_hash`` (the game's NetFullCombatState hash at the boundary),
-``checkpoints`` (the game's own checksums taken since the previous reply), ``enqueued_by_game`` and
-``game_errors`` (error-level lines the game logged since the previous reply). ``load`` and ``start`` take
-``hashes=False`` for training: ``state_hash`` comes back null and ``checkpoints`` empty, and nothing else changes.
-
-Also here: ``recorded_action``, which turns a tape's net actions into the same caller vocabulary. It is what
-the parity test feeds through ``step``.
-
-``start_run`` / ``run_step`` keep one native RunState across rooms. Each call is recorded as JSONL at
-``run_trace_path`` in the worker's scratch directory.
+Combat replies contain boundary, obs, legal, choice, and diagnostics. With hashes=False,
+state_hash is null and checkpoints is empty. Whole-run calls retain native state across
+rooms and record requests and replies at run_trace_path in the worker scratch directory.
+recorded_action translates tape events for the parity tests. See docs/combat-parity.md.
 """
 
 import json
@@ -28,8 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LIB = ROOT / "lib" / "sts2.dll"  # present once ./setup.sh has copied and patched the game's DLLs
 PROJECT = ROOT / "dotnet" / "CombatWorker" / "CombatWorker.csproj"
-# Release: the worker's own code (observation, legal inputs, JSON) is a third of a step in a Debug build.
-# STS2_BRIDGE_WORKER points at another build, e.g. to compare two.
+# Default to Release; STS2_BRIDGE_WORKER overrides the binary for build comparisons.
 BINARY = Path(os.environ.get("STS2_BRIDGE_WORKER") or ROOT / "dotnet" / "CombatWorker" / "bin" / "Release" / "net9.0" / "CombatWorker.dll")
 
 # Tape events the game produces by itself on the singleplayer net service; a caller never sends them.
@@ -66,8 +52,7 @@ class CombatWorker:
         self.send(cmd, **fields)
         return self.receive()
 
-    # A request in two halves, so one caller can keep several workers busy at once: send to each, then receive
-    # from each. Every send must be matched by one receive, in order.
+    # Split requests to overlap workers. Match each send with one receive, in order.
     def send(self, cmd, **fields):
         self._proc.stdin.write(json.dumps({"cmd": cmd, **fields}) + "\n")
 
@@ -79,11 +64,11 @@ class CombatWorker:
         return self.request("load", mcr=str(Path(mcr).resolve()), hashes=hashes)
 
     def start(self, spec, hashes=True, reuse_map=False):
-        """Enter any fight from a spec: character, ascension, seed, encounter and a partial save player (see
-        ``spec_from_run`` and CombatWorker/CombatSpec.cs). Returns the first decision boundary.
+        """Start a spec and return its first decision boundary; see docs/combat-parity.md.
 
-        For training: ``hashes=False`` leaves ``state_hash`` and ``checkpoints`` out of every reply, and
-        ``reuse_map=True`` generates the act's map once per spec instead of once per seed. Neither changes the fight."""
+        ``hashes=False`` returns null state_hash and empty checkpoints. ``reuse_map=True``
+        caches the act map by spec, excluding seed. Combat RNG remains seeded per start.
+        """
         return self.request("start", spec=spec, hashes=hashes, reuse_map=reuse_map)
 
     def catalog(self):

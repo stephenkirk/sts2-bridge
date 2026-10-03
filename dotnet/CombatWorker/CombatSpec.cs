@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MegaCrit.Sts2.Core.Entities.Ascension;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
@@ -7,27 +8,10 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Saves.Runs;
 using MegaCrit.Sts2.Core.Unlocks;
 
-// A combat described by what a player brings into it, turned into the save the game would load it from.
-//
-//   {"character": "CHARACTER.DEFECT", "ascension": 10, "seed": "ANY", "encounter": "ENCOUNTER.THE_INSATIABLE_BOSS",
-//    "act": 1,                                   optional; defaults to the act whose encounter list has it
-//    "player": {"current_hp": 50, "max_hp": 75, "deck": [...], "relics": [...], "potions": [...], ...},
-//    "run": {"rng": {...}, "map_point_history": [[...]]}}       optional
-//
-// "player" is a partial SerializablePlayer in the game's own JSON, the shape a .run history file (the local
-// saves/history and the Spire Codex export alike) records its players in: deck entries are SerializableCards with
-// upgrades, enchantments and props, relics are SerializableRelics with their saved counters, potions carry their
-// slot. Any field it names replaces the one in a fresh run of that character, ascension and seed; the rest (player
-// RNG, odds, unlocks, max energy, orb slots) stays as the new run made it.
-//
-// The fresh run goes through RunManager.SetUpNewSingleplayer, the game's own new-run setup (starting inventory,
-// ascension effects, room generation), and comes back out as RunManager.ToSave. The player is then overlaid and the
-// result loaded like any save: nothing is obtained, so relics' on-pickup effects do not fire a second time. What
-// the spec says the player has is what they have.
-//
-// "run" is a partial SerializableRun, overlaid the same way before the player. It is how a spec re-enters a fight a
-// run really had: the run's RNG counters at that combat, and the map history before it, which sets the floor number
-// the encounter seeds its monsters with (EncounterModel.GenerateMonstersWithSlots).
+// Convert a combat spec to a native save. Schema and examples: docs/combat-parity.md.
+// Player and run overlays use the game's SerializablePlayer/SerializableRun JSON fields.
+// Unspecified fields retain native fresh-run defaults. Loading inventory avoids repeating pickup effects.
+// Run history sets the floor used by EncounterModel.GenerateMonstersWithSlots; RNG counters must be pre-shuffle.
 static class CombatSpec
 {
     public static (SerializableRun Save, EncounterModel Encounter) ToSave(JsonObject spec)
@@ -86,9 +70,7 @@ static class CombatSpec
             ?? throw new ArgumentException($"{typeof(T).Name} overlay deserialised to null");
     }
 
-    // A save with an id this build does not know loads anyway: SaveUtil swaps in DeprecatedCard, DeprecatedRelic and
-    // so on. That is right for a player's save file and wrong for a spec, where it would start a different fight from
-    // the one asked for. Modded runs in the Spire Codex export and runs from older builds both hit this.
+    // SaveUtil substitutes deprecated models for unknown IDs. Reject them in specs to preserve the requested loadout.
     static void RequireKnownIds(JsonObject overlay)
     {
         var unknown = new List<string>();
@@ -131,19 +113,23 @@ static class CombatSpec
     static ModelId Id(JsonObject spec, string key) =>
         ModelId.Deserialize((string?)spec[key] ?? throw new ArgumentException($"spec needs {key}"));
 
-    // What a spec can name: characters, and every encounter with the act and room type it belongs to.
+    // What a spec can name: characters with fresh-run HP and deck, and each encounter with its act and room type.
     public static object Catalog() => new
     {
         ok = true,
         characters = ModelDb.AllCharacters.Select(c => c.Id.ToString()).ToList(),
         starting_hp = ModelDb.AllCharacters.ToDictionary(c => c.Id.ToString(), c => c.StartingHp),
+        // Player.PopulateStartingDeck copies these at floor 1; AscensionManager adds the curse from this level on.
+        starting_deck = ModelDb.AllCharacters.ToDictionary(c => c.Id.ToString(),
+            c => c.StartingDeck.Select(card => card.Id.ToString()).ToList()),
+        ascenders_bane_ascension = (int)AscensionLevel.AscendersBane,
         encounters = ModelDb.AllEncounters.Select(e => new
         {
             id = e.Id.ToString(),
             room_type = e.RoomType.ToString(),
             acts = ModelDb.Acts.Where(a => a.AllEncounters.Any(x => x.Id == e.Id)).Select(a => a.Id.ToString()).ToList(),
             act_index = ActIndexOf(e),
-            // In an act's weak pool: the hallway fights the game draws for the first floors of the act.
+            // Weak slots count normal combats, regardless of floor.
             weak = ModelDb.Acts.Any(a => a.AllWeakEncounters.Any(x => x.Id == e.Id)),
         }).ToList(),
     };

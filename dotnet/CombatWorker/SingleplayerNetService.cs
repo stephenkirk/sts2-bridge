@@ -5,14 +5,9 @@ using MegaCrit.Sts2.Core.Multiplayer.Quality;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
 using MegaCrit.Sts2.Core.Platform;
 
-// The game's NetSingleplayerGameService, member for member, except that NetId is the recorded player's.
-//
-// A real singleplayer run has NetId 1. The .mcr writer anonymises every player id with a random value
-// (IdAnonymizer, Rng.Chaotic), so the tape's player is e.g. 1480334801, and so is the playerId inside every
-// recorded checkpoint. RunManager.Launch sets LocalContext.NetId from the net service, and the game's
-// singleplayer service hard-codes 1: with it, LocalContext.GetMe finds nobody and the turn loop dies at the first
-// end turn. Giving the service the recorded id keeps both the game's singleplayer branches (every one of them
-// tests Type, not NetId) and the recorded checkpoint hashes.
+// Match NetSingleplayerGameService, except NetId uses the recorded player's anonymized ID.
+// The native service hard-codes 1, which makes LocalContext.GetMe fail on recordings.
+// Retaining the recorded ID preserves checkpoint hashes; singleplayer branches depend on Type.
 sealed class SingleplayerNetService(ulong netId) : INetGameService
 {
     bool _isLoading;
