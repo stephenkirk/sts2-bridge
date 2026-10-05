@@ -170,11 +170,12 @@ def evaluator(cfg, vocab_table, weights_q, out_q, fights, n_seeds, n_sampled, re
             t0 = time.time()
             vocab = Vocab(vocab_table, frozen=True)  # diagnostics for this evaluation only
             cards = {}  # character -> card id -> [decisions playable, decisions played]
-            held = summary([play(w, net, vocab, f, f"{eval_prefix}-{i}", greedy=True, record=False,
-                                 cards=cards.setdefault(character(f), {}), scoring=scoring)[1]
-                            for f in fights for i in range(n_seeds)], fights=True)
-            ev = dict(version=version, episodes=episode_count, heldout=held)
+            results = [play(w, net, vocab, f, f"{eval_prefix}-{i}", greedy=True, record=False,
+                            cards=cards.setdefault(character(f), {}), trace=True, scoring=scoring)[1]
+                       for f in fights for i in range(n_seeds)]
+            ev = dict(version=version, episodes=episode_count, heldout=summary(results, fights=True))
             ev["heldout_cards"] = cards
+            ev["heldout_fights"] = [fight_row(r, i % n_seeds) for i, r in enumerate(results)]
             ev["heldout_vocab"] = vocab.diagnostics()
             recorded = [f for f in fights if f.get("recording")]
             if len(recorded) == 1:
@@ -183,6 +184,14 @@ def evaluator(cfg, vocab_table, weights_q, out_q, fights, n_seeds, n_sampled, re
                                                   for _ in range(n_sampled))
             out_q.put(dict(ev, eval_s=round(time.time() - t0, 1)))
             evaluated_initial = True
+
+
+def fight_row(res, seed):
+    """One held-out fight for agents.nn.compare: outcome, cause and turn-start columns."""
+    t = res["trace"]
+    return dict(fight=res["fight"], seed=seed, won=res["won"], turn=res["turn"], hp=res["hp"], boss=res["boss"],
+                hp0=res["hp0"], boss0=res["boss0"], cause=res["cause"], lethal=res["lethal"], lethal_died=res["lethal_died"],
+                turns=dict(hp=[x["hp"] for x in t], boss=[x["boss"] for x in t], incoming=[x["incoming"] for x in t]))
 
 
 def save_best(out, ev):

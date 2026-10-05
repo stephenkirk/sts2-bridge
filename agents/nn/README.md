@@ -77,6 +77,23 @@ The file is a JSON list of `{"name", "spec", "you": {"lost", "turns"}}`; see
 [reconstructing fights](../../docs/reconstructing-fights.md) for spec provenance.
 A standalone watcher accepts the same file through `--rematch`.
 
+Train two arms side by side with the comparison dashboard:
+
+```sh
+INIT=~/src/sts2-bridge/.context/nn-inits/library-act1-it200-insatiable.pt
+.venv/bin/python -m agents.nn.pair --arm lib-win=insatiable-library-win \
+  --arm lib-damage=insatiable-library-damage --init-from $INIT --actors 3
+```
+
+Other flags go to both trainers. The dashboard listens on port 8772 (`--port`). Ctrl-C stops everything, and
+so does a failure in either arm. `python -m agents.nn.compare` serves the same page for existing runs at
+`?a=RUN&b=RUN`. It places both runs on a fights-played axis, and a scrubber picks the evaluation shown.
+The per-fight panels need `heldout_fights` in the evaluations, which runs log since 2026-10-06: outcome, a
+cause (enemy damage, Sandpit, the player's own action, or timeout; Sandpit's removal kills the player before
+the attack, so its disappearance identifies those losses), lethal turns faced and died on, and the HP and
+boss HP at each turn start. For Insatiable runs, a background worker probes every snapshot along the hand-played
+win and writes the turn-5 probabilities to `runs/<name>/probe.jsonl`.
+
 Watch a checkpoint play:
 
 ```sh

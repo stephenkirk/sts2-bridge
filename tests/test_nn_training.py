@@ -54,6 +54,34 @@ class TrainingTests(unittest.TestCase):
         self.assertEqual(self.result(hp=0, alive=True)["reward"], 0)
         self.assertEqual(self.result(hp=60, turn=31, terminal=False, alive=True)["reward"], 0)
 
+    def test_turn_row_reads_the_attack_and_sandpit_of_living_enemies(self):
+        obs = dict(turn=5, player=dict(hp=5, block=0), enemies=[
+            dict(hp=190, alive=True, intent=dict(intents=[dict(type="Attack", damage=12, hits=2), dict(type="Buff")]),
+                 powers=[dict(id="POWER.SANDPIT_POWER", amount=1)]),
+            dict(hp=0, alive=False, intent=dict(intents=[dict(type="Attack", damage=99)]), powers=[])])
+        self.assertEqual(episode.turn_row(obs), dict(turn=5, hp=5, block=0, boss=190, incoming=24, clock=1))
+
+    def test_ending_reads_sandpit_from_its_removal_and_counts_lethal_turns(self):
+        row = lambda hp, incoming: dict(hp=hp, block=0, incoming=incoming)
+        obs = lambda side="Enemy", pit=True: dict(obs=dict(side=side, enemies=[dict(alive=True, powers=[
+            dict(id="POWER.SANDPIT_POWER", amount=1)] if pit else [])]))
+        loss = dict(won=False, timeout=False)
+        survived_then_died = [row(37, 0), row(5, 24), row(5, 24)]
+        self.assertEqual(episode.ending(loss, survived_then_died, obs(), obs()), dict(cause="attack", lethal=2, lethal_died=1))
+        # Sandpit kills a player the attack would not have: it acts first and goes through HP.
+        self.assertEqual(episode.ending(loss, [row(30, 10)], obs(), obs(pit=False))["cause"], "sandpit")
+        self.assertEqual(episode.ending(loss, [row(1, 0)], obs("Player"), obs("Player"))["cause"], "own_turn")
+        self.assertEqual(episode.ending(dict(won=True, timeout=False), [row(5, 24)], obs(), obs(pit=False)),
+                         dict(cause="win", lethal=1, lethal_died=0))
+        self.assertEqual(episode.ending(dict(won=False, timeout=True), [row(5, 24)], obs(), obs())["lethal_died"], 0)
+
+    def test_fight_row_keeps_turn_columns(self):
+        res = dict(fight="F", won=False, turn=2, hp=0, boss=100, hp0=37, boss0=332, cause="hp", lethal=1, lethal_died=1,
+                   trace=[dict(hp=37, boss=332, incoming=0), dict(hp=5, boss=200, incoming=24)])
+        row = train.fight_row(res, 7)
+        self.assertEqual(row["seed"], 7)
+        self.assertEqual(row["turns"], dict(hp=[37, 5], boss=[332, 200], incoming=[0, 24]))
+
     def test_scoring_calls_do_not_contaminate_each_other(self):
         hp = self.result()["reward"]
         self.scoring = episode.Scoring("survival", 0)

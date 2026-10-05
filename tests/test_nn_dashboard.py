@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agents.nn import launch, watch
+from agents.nn import compare, launch, pair, watch
 
 
 class DashboardTests(unittest.TestCase):
@@ -72,3 +72,39 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(data["metadata"]["initialization"]["mode"], "branch")
             self.assertEqual(data["rows"], [])
             self.assertEqual(data["hp0"], {})
+
+
+class CompareTests(unittest.TestCase):
+    def test_pair_passes_training_flags_to_both_arms(self):
+        args = argparse.Namespace(arm=[("w", "insatiable-library-win"), ("d", "insatiable-library-damage")], port=8772)
+        server, trainers = pair.commands(args, ["--init-from", "init.pt", "--actors", "3"])
+        self.assertEqual(server, [sys.executable, "-m", "agents.nn.compare", "--port", "8772"])
+        self.assertEqual(trainers[1], [sys.executable, "-m", "agents.nn.train", "--name", "d", "--experiment",
+                                       "insatiable-library-damage", "--init-from", "init.pt", "--actors", "3"])
+        with self.assertRaises(argparse.ArgumentTypeError):
+            pair.arm("no-equals")
+
+    def test_turn5_picks_the_watched_decisions(self):
+        rows = [(4, "CARD.TURBO+", .5, "CARD.TURBO+", .5), (5, "CARD.SYNCHRONIZE+", .1, "CARD.HOLOGRAM+", .8),
+                (5, "CARD.HOLOGRAM+", .9, "CARD.HOLOGRAM+", .9), (5, "-> CARD.BOOT_SEQUENCE+", .02, "-> CARD.REFRACT+", .7)]
+        out = compare.turn5(rows)
+        self.assertEqual((out["sync_first"], out["boot"], out["top_after_hologram"]), (.1, .02, "-> CARD.REFRACT+"))
+        self.assertAlmostEqual(out["joint"]["5"], .1 * .9 * .02)
+
+    def test_arm_sorts_evaluations_and_merges_card_counts(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(compare, "RUNS", Path(tmp)):
+            run = Path(tmp) / "w"
+            run.mkdir()
+            base = dict(collect_s=1, update_s=1, dropped=0, entropy=1, vloss=0, clipfrac=0, train_win=0)
+            ev = lambda v: dict(version=v, episodes=v * 10, heldout=dict(win=.1, boss=100, turn=5, n=100),
+                                heldout_cards={"DEFECT": {"CARD.ZAP": [4, 1]}}, heldout_fights=[dict(seed=0, won=True)])
+            rows = [dict(args=dict(reward="win")), dict(it=2, episodes=20, min=1, eval=ev(2), **base),
+                    dict(it=3, episodes=30, min=1, eval=ev(0), **base)]
+            (run / "log.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + '\n{"it":')
+            (run / "probe.jsonl").write_text(json.dumps(dict(snapshot="it00000.pt", fights=0, boot=.01)) + "\n")
+            out = compare.arm("w")
+            self.assertEqual([e["it"] for e in out["evals"]], [0, 2])
+            self.assertEqual(out["evals"][0]["cards"], {"CARD.ZAP": [4, 1]})
+            self.assertEqual(out["evals"][0]["each"], [dict(seed=0, won=True)])
+            self.assertEqual(out["metadata"]["reward"], "win")
+            self.assertEqual(out["probe"][0]["boot"], .01)

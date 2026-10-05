@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two runs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.viz-root {
+  color-scheme: light;
+  --surface-0: #f4f3f0; --surface-1: #fcfcfb; --hairline: #e3e2dd; --grid: #ecebe7;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8984;
+  --c-a: #2a78d6; --c-b: #eb6834; --ghost: #c9c8c2; --div-mid: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --hairline: #2e2e2c; --grid: #262624;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #85847c;
+    --c-a: #3987e5; --c-b: #d95926; --ghost: #4a4a46; --div-mid: #383835;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.viz-root { color: var(--text-primary); background: var(--surface-0); min-height: 100vh; padding: 20px 24px 40px; max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; }
+h2 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+.sub { color: var(--text-secondary); font-size: 12px; margin: 0 0 10px; max-width: 90ch; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 10px; }
+.status { color: var(--text-muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+select, button { font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; }
+.arms { display: grid; gap: 4px; margin-bottom: 12px; }
+.armline { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.armline .name { font-weight: 600; min-width: 9em; display: inline-flex; gap: 6px; align-items: center; }
+.key { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; }
+.scrub { position: sticky; top: 0; z-index: 5; background: var(--surface-0); padding: 8px 0; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--hairline); margin-bottom: 16px; }
+.scrub input { flex: 1; accent-color: var(--text-secondary); }
+.card { background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.grid2 > .card, .grid4 > .card { margin-bottom: 0; }
+.row16 { margin-bottom: 16px; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+h3 { font-size: 13px; margin: 0 0 2px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.counts { margin: 2px 0 6px; color: var(--text-secondary); }
+.legend { display: flex; gap: 14px; color: var(--text-secondary); font-size: 12px; margin: 2px 0 8px; flex-wrap: wrap; align-items: center; }
+svg { display: block; width: 100%; overflow: visible; }
+svg text { font-size: 10px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+.seeds svg rect.cell:hover { stroke: var(--text-primary); stroke-width: 1; }
+.bars { display: grid; grid-template-columns: 11em minmax(0, 1fr) 12em; gap: 4px 10px; align-items: center; font-size: 12px; }
+.bars .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bars .track { position: relative; height: 10px; background: var(--grid); border-radius: 4px; }
+.bars .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--text-muted); }
+.bars .fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+footer { color: var(--text-muted); font-size: 12px; max-width: 110ch; margin-top: 8px; }
+footer p { margin: 0 0 6px; }
+#tip { position: fixed; pointer-events: none; background: var(--surface-1); border: 1px solid var(--hairline); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: none; z-index: 10; min-width: 140px; max-width: 340px; color: var(--text-primary); }
+#tip .head { color: var(--text-secondary); margin-bottom: 4px; }
+#tip .row { display: flex; align-items: center; gap: 6px; }
+#tip .row strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .grid2, .pair { grid-template-columns: 1fr; } .grid4 { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <header>
+    <h1 id="title">Two runs</h1>
+    <select id="pickA" aria-label="Run A"></select>
+    <select id="pickB" aria-label="Run B"></select>
+    <span class="status" id="status">loading…</span>
+  </header>
+  <div class="arms" id="arms"></div>
+  <div class="scrub">
+    <button id="play" aria-label="Play through snapshots">▶</button>
+    <input type="range" id="scrub" min="0" max="0" step="1" value="0" aria-label="Fights played">
+    <span class="mono" id="scrubLabel"></span>
+  </div>
+
+  <div class="grid2 row16">
+    <div class="card"><h2>Held-out wins</h2>
+      <p class="sub">Greedy play on the held-out seeds, with a 95% band. Thin line: sampled training fights, mean of the last 10 updates.</p>
+      <div id="wins"></div></div>
+    <div class="card"><h2>Wins against damage dealt in losses</h2>
+      <p class="sub">One point per evaluation. Up is the damage reward's consolation; right is winning. Both arms start at the same point.</p>
+      <div id="diverge"></div></div>
+  </div>
+
+  <div class="card"><h2>Where held-out fights end</h2>
+    <p class="sub">One mark per held-out fight at the selected fight count. Gray: the same arm's first evaluation.</p>
+    <div class="legend" id="endsLegend"></div>
+    <div class="pair" id="ends"></div></div>
+
+  <div class="card"><h2>HP at the start of each turn</h2>
+    <p class="sub">Thin lines: single held-out fights. Thick line: median over fights still going at that turn, while at least 5 are.</p>
+    <div class="pair" id="race"></div></div>
+
+  <div class="grid2 row16">
+    <div class="card"><h2>Lethal turns survived</h2>
+      <p class="sub">A lethal turn starts with the announced attack at or above HP plus block.</p>
+      <div id="lethal"></div></div>
+    <div class="card"><h2>Recorded deal, turn 5</h2>
+      <p class="sub">Probabilities along the hand-played win, with the same states for both arms.</p>
+      <div class="pair" id="probe"></div>
+      <div class="counts mono" id="recorded"></div></div>
+  </div>
+
+  <div class="card seeds"><h2>Held-out seeds won</h2>
+    <p class="sub">One column per seed, one row per evaluation, earliest at the top. Filled: won. The outlined row is the selected fight count.</p>
+    <div class="counts mono" id="seedCounts"></div>
+    <div id="seeds"></div></div>
+
+  <div class="card"><h2>Card play rate</h2>
+    <p class="sub">Share of decisions with the card playable where a copy was played, at the selected fight count. Sorted by gap.</p>
+    <div class="legend" id="cardsLegend"></div>
+    <div class="bars" id="cards"></div></div>
+
+  <div class="card"><h2>Training health</h2>
+    <div class="grid4" id="health"></div></div>
+
+  <footer id="footer"></footer>
+</div>
+<div id="tip"></div>
+<script>
+const ARMS = ["--c-a", "--c-b"];
+const css = v => getComputedStyle(document.querySelector(".viz-root")).getPropertyValue(v).trim();
+const fmt = (v, d = 1) => v == null || isNaN(v) ? "–" : Number(v).toFixed(d);
+const pct = v => v == null || isNaN(v) ? "–" : Math.round(v * 100) + "%";
+const kfmt = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n);
+const median = xs => { const s = [...xs].sort((a, b) => a - b); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : null; };
+const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+const short = id => id.replace(/^CARD\./, "").replace(/_DEFECT/, "").split("_").map(w => w[0] + w.slice(1).toLowerCase()).join(" ");
+const S = (tag, attrs, parent) => {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const text = (tag, s, parent, cls) => { const e = document.createElement(tag); e.textContent = s; if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; };
+const wilson = (p, n, z = 1.96) => {
+  if (!n) return [null, null];
+  const d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d;
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+};
+
+// ---- tooltip ----
+const tip = document.getElementById("tip");
+function showTip(ev, head, rows) {
+  tip.replaceChildren();
+  text("div", head, tip, "head");
+  for (const r of rows) {
+    const row = text("div", "", tip, "row");
+    if (r.color) text("span", "", row, "key").style.borderColor = r.color;
+    if (r.value != null) text("strong", r.value, row);
+    text("span", r.label, row).style.color = css("--text-secondary");
+  }
+  tip.style.display = "block";
+  tip.style.left = Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = Math.min(ev.clientY + 14, innerHeight - tip.offsetHeight - 8) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+const hover = (node, head, rows) => { node.addEventListener("pointermove", ev => showTip(ev, head, rows())); node.addEventListener("pointerleave", hideTip); };
+
+// ---- one chart frame: linear scales, gridlines, axis labels ----
+function frame(parent, { x0, x1, y0, y1, height = 160, xFmt = String, yFmt = v => fmt(v), xLabel }) {
+  const W = Math.max(240, Math.round(parent.getBoundingClientRect().width)) || 320, H = height, L = 36, R = 8, T = 8, B = 20;  // 1 unit = 1px
+  const svg = S("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, parent);
+  const X = x => L + (x - x0) / (x1 - x0 || 1) * (W - L - R), Y = y => T + (1 - (y - y0) / (y1 - y0 || 1)) * (H - T - B);
+  for (const f of [0, .5, 1]) {
+    const v = y0 + f * (y1 - y0);
+    S("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), stroke: css("--grid") }, svg);
+    S("text", { x: L - 4, y: Y(v) + 3, "text-anchor": "end" }, svg).textContent = yFmt(v);
+  }
+  S("text", { x: L, y: H - 5 }, svg).textContent = xFmt(x0);
+  S("text", { x: W - R, y: H - 5, "text-anchor": "end" }, svg).textContent = xFmt(x1) + (xLabel ? " " + xLabel : "");
+  return { svg, X, Y, W, H, L, R, T, B };
+}
+const path = pts => pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join("");
+
+// Lines over fights played for both arms, with optional bands, a dashed reference and the scrubber cursor.
+function overFights(parent, { series, refs = [], yMax, yFmt = pct, height = 160 }) {
+  const all = series.flatMap(s => s.points);
+  const x1 = Math.max(1, ...all.map(p => p[0]));
+  const top = yMax ?? Math.max(.05, ...all.map(p => p[1]).filter(v => v != null), ...series.flatMap(s => (s.band || []).map(b => b[2]))) * 1.15;
+  const f = frame(parent, { x0: 0, x1, y0: 0, y1: top, height, xFmt: kfmt, yFmt, xLabel: "fights" });
+  for (const r of refs) {
+    S("line", { x1: f.L, x2: f.W - f.R, y1: f.Y(r.y), y2: f.Y(r.y), stroke: css("--text-muted"), "stroke-dasharray": "3 3" }, f.svg);
+    S("text", { x: f.W - f.R, y: f.Y(r.y) - 3, "text-anchor": "end" }, f.svg).textContent = `${r.label} ${yFmt(r.y)}`;
+  }
+  for (const s of series) {
+    if (s.band?.length > 1) S("path", { d: path(s.band.map(b => [f.X(b[0]), f.Y(b[2])])) + path([...s.band].reverse().map(b => [f.X(b[0]), f.Y(b[1])])).replace("M", "L") + "Z",
+      fill: s.color, opacity: .08 }, f.svg);
+    const pts = s.points.filter(p => p[1] != null);
+    if (pts.length) S("path", { d: path(pts.map(p => [f.X(p[0]), f.Y(p[1])])), fill: "none", stroke: s.color, "stroke-width": s.width || 2,
+      opacity: s.opacity ?? 1, "stroke-linejoin": "round", "stroke-linecap": "round" }, f.svg);
+  }
+  S("line", { x1: f.X(at), x2: f.X(at), y1: f.T, y2: f.H - f.B, stroke: css("--text-secondary"), "stroke-width": 1 }, f.svg);
+  const hit = S("rect", { x: f.L, y: 0, width: f.W - f.L - f.R, height: f.H, fill: "transparent" }, f.svg);
+  hit.addEventListener("pointermove", ev => {
+    const box = f.svg.getBoundingClientRect(), xv = ((ev.clientX - box.left) / box.width * f.W - f.L) / (f.W - f.L - f.R) * x1;
+    const rows = series.filter(s => s.points.length).map(s => {
+      const q = s.points.reduce((a, p) => Math.abs(p[0] - xv) < Math.abs(a[0] - xv) ? p : a);
+      return { value: yFmt(q[1]), label: `${s.label} at ${kfmt(q[0])}`, color: s.color };
+    });
+    showTip(ev, `${kfmt(Math.round(xv))} fights`, rows);
+  });
+  hit.addEventListener("pointerleave", hideTip);
+}
+
+// ---- state ----
+const q = new URLSearchParams(location.search);
+let D = null, at = 0, follow = true, playing = null;
+const evalAt = (arm, x) => arm.evals.reduce((best, e) => e.fights <= x ? e : best, null) || arm.evals[0] || null;
+const probeAt = (arm, x) => arm.probe.reduce((best, p) => p.fights <= x ? p : best, null);
+const color = i => css(ARMS[i]);
+const label = arm => arm.run;
+const lossShare = e => { const ls = (e.each || []).filter(r => !r.won); return ls.length ? mean(ls.map(r => (r.boss0 - r.boss) / r.boss0)) : null; };
+const stops = () => [...new Set(D.arms.flatMap(a => a.evals.map(e => e.fights)))].sort((a, b) => a - b);
+const xMax = () => Math.max(0, ...D.arms.flatMap(a => a.rows.map(r => r.fights)));
+
+function header() {
+  const box = document.getElementById("arms"); box.replaceChildren();
+  D.arms.forEach((a, i) => {
+    const m = a.metadata || {}, last = a.rows[a.rows.length - 1], e = evalAt(a, at);
+    const line = text("div", "", box, "armline");
+    const name = text("span", "", line, "name"); text("span", "", name, "key").style.borderColor = color(i); name.append(a.run);
+    text("span", `reward ${m.reward || "?"}`, line, "mono");
+    text("span", last ? `it ${last.it} · ${last.fights.toLocaleString()} fights · ${fmt(last.min)} min` : "no updates yet", line, "mono");
+    text("span", e ? `shown: evaluation at it ${e.it}, ${e.fights.toLocaleString()} fights` : "no evaluation yet", line, "mono muted");
+  });
+  document.getElementById("title").textContent = `${D.arms[0].run} vs ${D.arms[1].run}`;
+  document.title = `${D.arms[0].run} vs ${D.arms[1].run}`;
+}
+
+function wins() {
+  const box = document.getElementById("wins"); box.replaceChildren();
+  const series = [];
+  D.arms.forEach((a, i) => {
+    series.push({ label: `${label(a)} held-out`, color: color(i), points: a.evals.map(e => [e.fights, e.win]),
+                  band: a.evals.map(e => [e.fights, ...wilson(e.win, e.n)]) });
+    const smooth = a.rows.map((r, k) => [r.fights, mean(a.rows.slice(Math.max(0, k - 9), k + 1).map(x => x.train_win))]);
+    series.push({ label: `${label(a)} sampled`, color: color(i), width: 1, opacity: .7, points: smooth });
+  });
+  const start = D.arms[0].evals[0];
+  overFights(box, { series, refs: start ? [{ y: start.win, label: "start" }] : [] });
+}
+
+function diverge() {
+  const box = document.getElementById("diverge"); box.replaceChildren();
+  const pts = D.arms.map(a => a.evals.map(e => ({ e, x: e.win, y: lossShare(e) })).filter(p => p.y != null));
+  const flat = pts.flat();
+  if (!flat.length) { text("p", "waiting for an evaluation with per-fight rows", box, "sub"); return; }
+  const xm = Math.max(.1, ...flat.map(p => p.x)) * 1.15, ys = flat.map(p => p.y);
+  const y0 = Math.max(0, Math.min(...ys) - .05), y1 = Math.min(1, Math.max(...ys) + .05);
+  const f = frame(box, { x0: 0, x1: xm, y0, y1, height: 200, xFmt: pct, yFmt: pct, xLabel: "held-out wins" });
+  S("text", { x: f.L + 2, y: f.T + 9 }, f.svg).textContent = "boss HP removed in losses";
+  pts.forEach((ps, i) => {
+    if (!ps.length) return;
+    S("path", { d: path(ps.map(p => [f.X(p.x), f.Y(p.y)])), fill: "none", stroke: color(i), "stroke-width": 2, opacity: .8, "stroke-linejoin": "round" }, f.svg);
+    const sel = evalAt(D.arms[i], at);
+    for (const p of ps) {
+      const on = p.e === sel;
+      const c = S("circle", { cx: f.X(p.x), cy: f.Y(p.y), r: on ? 6 : 3.5, fill: color(i), stroke: css("--surface-1"), "stroke-width": on ? 2.5 : 1.5 }, f.svg);
+      hover(c, `${label(D.arms[i])} · it ${p.e.it} · ${kfmt(p.e.fights)} fights`, () => [
+        { value: pct(p.x), label: "held-out wins" }, { value: pct(p.y), label: "boss HP removed in losses" }]);
+    }
+  });
+  const s = pts.find(p => p.length)?.[0];
+  if (s) S("text", { x: f.X(s.x) + 8, y: f.Y(s.y) + 3 }, f.svg).textContent = "start";
+}
+
+const CAUSES = { win: "won", attack: "enemy damage", sandpit: "Sandpit ran out", own_turn: "own action", timeout: "turn 30" };
+function marker(svg, cause, x, y, fill, r = 4) {
+  const ring = css("--surface-1");
+  if (cause === "win") return S("path", { d: `M${x},${y - r - 1}L${x + r + 1},${y + r}L${x - r - 1},${y + r}Z`, fill, stroke: ring, "stroke-width": 1.5 }, svg);
+  if (cause === "sandpit") return S("circle", { cx: x, cy: y, r: r - .5, fill: "none", stroke: fill, "stroke-width": 2 }, svg);
+  if (cause === "own_turn") return S("path", { d: `M${x - r},${y - r}L${x + r},${y + r}M${x + r},${y - r}L${x - r},${y + r}`, stroke: fill, "stroke-width": 2 }, svg);
+  if (cause === "timeout") return S("rect", { x: x - r, y: y - r, width: 2 * r, height: 2 * r, fill, stroke: ring, "stroke-width": 1.5 }, svg);
+  return S("circle", { cx: x, cy: y, r, fill, stroke: ring, "stroke-width": 1.5 }, svg);
+}
+function ends() {
+  const box = document.getElementById("ends"); box.replaceChildren();
+  const leg = document.getElementById("endsLegend"); leg.replaceChildren();
+  for (const [k, v] of Object.entries(CAUSES)) {
+    const s = text("span", "", leg); const svg = S("svg", { viewBox: "0 0 12 12", width: 12, height: 12 }, s); svg.style.width = "12px"; svg.style.display = "inline";
+    marker(svg, k, 6, 6, css("--text-secondary"), 4); s.append(" " + v);
+  }
+  const shown = D.arms.map(a => evalAt(a, at));
+  const all = shown.concat(D.arms.map(a => a.evals[0])).filter(e => e?.each).flatMap(e => e.each);
+  const tMax = Math.max(6, ...all.map(r => r.turn)), bMax = Math.max(1, ...all.map(r => r.boss0));
+  D.arms.forEach((a, i) => {
+    const panel = text("div", "", box), e = shown[i];
+    const h = text("h3", "", panel); text("span", "", h, "key").style.borderColor = color(i); h.append(label(a));
+    if (!e?.each) { text("p", "no per-fight rows in this run's evaluations", panel, "sub"); return; }
+    const n = c => e.each.filter(r => r.cause === c).length;
+    text("div", `won ${n("win")} · enemy damage ${n("attack")} · Sandpit ${n("sandpit")} · own action ${n("own_turn")} · timeout ${n("timeout")} · mean last turn ${fmt(mean(e.each.map(r => r.turn)))}`, panel, "counts mono");
+    const f = frame(panel, { x0: .5, x1: tMax + .5, y0: 0, y1: bMax, height: 200, xFmt: v => String(Math.round(v)), yFmt: v => fmt(v, 0), xLabel: "last turn" });
+    S("text", { x: f.L + 2, y: f.T + 9 }, f.svg).textContent = "boss HP left";
+    const jit = r => ((r.seed * 37) % 11 / 10 - .5) * .6;
+    const first = a.evals[0];
+    if (first?.each && first !== e) for (const r of first.each) marker(f.svg, r.cause, f.X(r.turn + jit(r)), f.Y(r.boss), css("--ghost"), 3);
+    for (const r of e.each) {
+      const m = marker(f.svg, r.cause, f.X(r.turn + jit(r)), f.Y(r.boss), color(i));
+      hover(m, `${label(a)} · seed ${r.seed}`, () => [{ value: CAUSES[r.cause], label: `on turn ${r.turn}` },
+        { value: `${r.hp}`, label: "player HP at the end" }, { value: `${r.boss}`, label: "boss HP at the end" },
+        { value: `${r.lethal - r.lethal_died}/${r.lethal}`, label: "lethal turns survived" }]);
+    }
+  });
+}
+
+function race() {
+  const box = document.getElementById("race"); box.replaceChildren();
+  const shown = D.arms.map(a => evalAt(a, at)).filter(e => e?.each);
+  if (!shown.length) { text("p", "no per-fight rows yet", box, "sub"); return; }
+  for (const [key, name] of [["hp", "Player HP"], ["boss", "Boss HP"]]) {
+    const panel = text("div", "", box); text("h3", name, panel);
+    const rows = shown.flatMap(e => e.each);
+    const tMax = Math.max(...rows.map(r => r.turns[key].length)), yMax = Math.max(1, ...rows.flatMap(r => r.turns[key]));
+    const f = frame(panel, { x0: 1, x1: tMax, y0: 0, y1: yMax, height: 190, yFmt: v => fmt(v, 0), xLabel: "turn" });
+    const medians = [];
+    D.arms.forEach((a, i) => {
+      const e = evalAt(a, at);
+      if (!e?.each) return;
+      for (const r of e.each) S("path", { d: path(r.turns[key].map((v, t) => [f.X(t + 1), f.Y(v)])), fill: "none", stroke: color(i), "stroke-width": 1, opacity: .1 }, f.svg);
+      const med = [];
+      // A median over a handful of surviving fights swings with each one; stop the line below 5.
+      for (let t = 0; t < tMax; t++) { const vs = e.each.filter(r => r.turns[key].length > t).map(r => r.turns[key][t]); if (vs.length >= 5) med.push([t + 1, median(vs), vs.length]); }
+      medians.push({ i, med });
+      S("path", { d: path(med.map(p => [f.X(p[0]), f.Y(p[1])])), fill: "none", stroke: color(i), "stroke-width": 2.5, "stroke-linejoin": "round" }, f.svg);
+    });
+    const hit = S("rect", { x: f.L, y: 0, width: f.W - f.L - f.R, height: f.H, fill: "transparent" }, f.svg);
+    hit.addEventListener("pointermove", ev => {
+      const b = f.svg.getBoundingClientRect(), t = Math.round(1 + ((ev.clientX - b.left) / b.width * f.W - f.L) / (f.W - f.L - f.R) * (tMax - 1));
+      showTip(ev, `turn ${t}`, medians.map(({ i, med }) => { const p = med.find(m => m[0] === t);
+        return { color: color(i), value: p ? fmt(p[1], 0) : "–", label: `${label(D.arms[i])} median · n ${p ? p[2] : 0}` }; }));
+    });
+    hit.addEventListener("pointerleave", hideTip);
+  }
+}
+
+function lethal() {
+  const box = document.getElementById("lethal"); box.replaceChildren();
+  const rate = e => { const f = e.each.reduce((s, r) => s + r.lethal, 0), d = e.each.reduce((s, r) => s + r.lethal_died, 0); return { f, d, p: f ? (f - d) / f : null }; };
+  const counts = text("div", "", box, "counts mono");
+  D.arms.forEach((a, i) => {
+    const e = evalAt(a, at);
+    if (!e?.each) return;
+    const r = rate(e);
+    const s = text("div", "", counts); text("span", "", s, "key").style.borderColor = color(i);
+    s.append(` ${label(a)}: faced ${r.f} · survived ${r.f - r.d} · died ${r.d}`);
+  });
+  overFights(box, { series: D.arms.map((a, i) => ({ label: label(a), color: color(i),
+    points: a.evals.filter(e => e.each).map(e => [e.fights, rate(e).p]) })), yMax: 1 });
+}
+
+function probe() {
+  const box = document.getElementById("probe"); box.replaceChildren();
+  for (const [key, name] of [["sync_first", "p(Synchronize+ first)"], ["boot", "p(Hologram+ → Boot Sequence+)"]]) {
+    const panel = text("div", "", box); text("h3", name, panel);
+    const now = text("div", "", panel, "counts mono");
+    now.textContent = D.arms.map(a => `${label(a)} ${fmt(probeAt(a, at)?.[key], 3)}`).join(" · ");
+    overFights(panel, { series: D.arms.map((a, i) => ({ label: label(a), color: color(i), points: a.probe.map(p => [p.fights, p[key]]) })),
+                        yFmt: v => fmt(v, 2), height: 130 });
+  }
+  const rec = document.getElementById("recorded"); rec.replaceChildren();
+  D.arms.forEach((a, i) => {
+    const e = evalAt(a, at), p = probeAt(a, at), r = e?.recorded;
+    const s = text("div", "", rec); text("span", "", s, "key").style.borderColor = color(i);
+    s.append(` ${label(a)} greedy on the recorded deal: ` + (r ? `${r.won ? "won" : "lost"} on turn ${r.turn}, HP ${r.hp}, boss ${r.boss}` : "–") +
+      ` · sampled wins ${pct(e?.recorded_sampled)}` + (p?.top_after_hologram ? ` · top pick after Hologram+ ${short(p.top_after_hologram.replace("-> ", ""))}` : ""));
+  });
+}
+
+function seeds() {
+  const box = document.getElementById("seeds"); box.replaceChildren();
+  const key = r => `${r.fight}#${r.seed}`;
+  const cols = [...new Set(D.arms.flatMap(a => a.evals.flatMap(e => (e.each || []).map(key))))];
+  if (!cols.length) { text("p", "no per-fight rows yet", box, "sub"); return; }
+  const idx = Object.fromEntries(cols.map((k, j) => [k, j]));
+  const cw = 6, gap = 1, W = cols.length * (cw + gap), rowsPerArm = D.arms.map(a => a.evals.filter(e => e.each).length);
+  const H = rowsPerArm.reduce((s, n) => s + n * (cw + gap) + 22, 0);
+  const svg = S("svg", { viewBox: `0 0 ${W + 4} ${H}`, role: "img" }, box);
+  svg.style.maxWidth = (W + 4) * 1.4 + "px";
+  let y = 0;
+  const shown = D.arms.map(a => evalAt(a, at));
+  D.arms.forEach((a, i) => {
+    S("text", { x: 0, y: y + 11 }, svg).textContent = label(a);
+    y += 16;
+    for (const e of a.evals.filter(e => e.each)) {
+      const won = new Map(e.each.map(r => [key(r), r]));
+      for (const k of cols) {
+        const r = won.get(k), cell = S("rect", { class: "cell", x: idx[k] * (cw + gap), y, width: cw, height: cw, rx: 1,
+          fill: r?.won ? color(i) : css("--grid") }, svg);
+        hover(cell, `${label(a)} · seed ${k.split("#")[1]} · it ${e.it}`, () => [{ value: r ? (r.won ? "won" : CAUSES[r.cause]) : "not played", label: r ? `turn ${r.turn}` : "" }]);
+      }
+      if (e === shown[i]) S("rect", { x: -1.5, y: y - 1.5, width: W + 2, height: cw + 3, fill: "none", stroke: css("--text-primary"), "stroke-width": 1, rx: 2 }, svg);
+      y += cw + gap;
+    }
+    y += 6;
+  });
+  const c = document.getElementById("seedCounts");
+  if (shown.every(e => e?.each)) {
+    const w = shown.map(e => new Set(e.each.filter(r => r.won).map(key)));
+    const first = D.arms.map(a => new Set((a.evals[0]?.each || []).filter(r => r.won).map(key)));
+    const gained = i => [...w[i]].filter(k => !first[i].has(k)).length, lost = i => [...first[i]].filter(k => !w[i].has(k)).length;
+    c.textContent = `both ${[...w[0]].filter(k => w[1].has(k)).length} · only ${label(D.arms[0])} ${[...w[0]].filter(k => !w[1].has(k)).length} · ` +
+      `only ${label(D.arms[1])} ${[...w[1]].filter(k => !w[0].has(k)).length} · vs first evaluation: ` +
+      D.arms.map((a, i) => `${label(a)} +${gained(i)} −${lost(i)}`).join(", ");
+  } else c.textContent = "";
+}
+
+function cards() {
+  const box = document.getElementById("cards"); box.replaceChildren();
+  const leg = document.getElementById("cardsLegend"); leg.replaceChildren();
+  D.arms.forEach((a, i) => { const s = text("span", "", leg); text("span", "", s, "key").style.borderColor = color(i); s.append(` bar toward ${label(a)}: played more by ${label(a)}`); });
+  const shown = D.arms.map(a => evalAt(a, at));
+  if (!shown.every(e => e?.cards)) return;
+  const ids = [...new Set(shown.flatMap(e => Object.keys(e.cards)))];
+  const rate = (e, id) => { const c = e.cards[id]; return c && c[0] ? c[1] / c[0] : null; };
+  const rows = ids.map(id => ({ id, a: rate(shown[0], id), b: rate(shown[1], id) })).filter(r => r.a != null && r.b != null)
+    .sort((x, y) => Math.abs(y.a - y.b) - Math.abs(x.a - x.b)).slice(0, 16);
+  for (const r of rows) {
+    text("span", short(r.id), box, "name");
+    const track = text("span", "", box, "track"); text("span", "", track, "mid");
+    const d = r.a - r.b, fill = text("span", "", track, "fill");
+    fill.style.background = color(d >= 0 ? 0 : 1);
+    fill.style.width = Math.abs(d) * 50 + "%";
+    fill.style[d >= 0 ? "right" : "left"] = "50%";
+    text("span", `${pct(r.a)} · ${pct(r.b)}`, box, "mono muted");
+  }
+}
+
+function health() {
+  const box = document.getElementById("health"); box.replaceChildren();
+  for (const [name, key, dp] of [["Fights per second", "fps", 0], ["Policy entropy", "entropy", 2], ["Value loss", "vloss", 4], ["Clip fraction", "clipfrac", 3]]) {
+    const p = text("div", "", box); text("h3", name, p);
+    overFights(p, { series: D.arms.map((a, i) => ({ label: label(a), color: color(i), points: a.rows.filter(r => r[key] != null).map(r => [r.fights, r[key]]) })),
+                    yFmt: v => fmt(v, dp), height: 110 });
+  }
+}
+
+function footer() {
+  const f = document.getElementById("footer"); f.replaceChildren();
+  const m = D.arms.map(a => a.metadata || {});
+  text("p", `Evaluations play the top-ranked move on ${m[0].eval_seeds ?? "?"} held-out seeds (${m[0].eval_prefix || "EVAL"}-*), the same seeds for both runs. ` +
+    "The scrubber picks a fight count; each run shows its latest evaluation at or before it. Bands are 95% Wilson intervals on held-out wins.", f);
+  text("p", "Sandpit deals no damage: when its counter runs out at the start of the enemy turn, it kills the player before any attack, through block. " +
+    "A loss counts as Sandpit when the final observation lost the Sandpit power, and as own action when it ended on the player's turn. " +
+    "Lethal turns compare the attack announced at the start of the turn with HP plus block then, so block gained during the turn is what survives them. " +
+    "The turn-5 probe holds the hand-played win's states fixed; it measures preference, not what either run reaches.", f);
+}
+
+// ---- refresh and scrubber ----
+const drawn = {};
+function section(name, key, fn) { const k = JSON.stringify(key); if (drawn[name] !== k) { drawn[name] = k; fn(); } }
+function draw() {
+  const sizes = D.arms.map(a => [a.run, a.rows.length, a.evals.length, a.probe.length]);
+  const e = D.arms.map(a => evalAt(a, at)?.it), p = D.arms.map(a => probeAt(a, at)?.it);
+  section("header", [sizes, e], header);
+  section("wins", [sizes, at], wins);
+  section("diverge", [sizes, e], diverge);
+  section("ends", [sizes, e], ends);
+  section("race", [sizes, e], race);
+  section("lethal", [sizes, at], lethal);
+  section("probe", [sizes, at, p], probe);
+  section("seeds", [sizes, e], seeds);
+  section("cards", [sizes, e], cards);
+  section("health", [sizes, at], health);
+  section("footer", [sizes.map(s => s[0])], footer);
+  document.getElementById("scrubLabel").textContent = `${at.toLocaleString()} fights`;
+}
+
+const scrub = document.getElementById("scrub");
+scrub.addEventListener("input", () => { at = +scrub.value; follow = at >= xMax(); draw(); });
+document.getElementById("play").addEventListener("click", ev => {
+  if (playing) { clearInterval(playing); playing = null; ev.target.textContent = "▶"; return; }
+  const s = stops(); if (!s.length) return;
+  let k = 0; ev.target.textContent = "❚❚"; follow = false;
+  playing = setInterval(() => {
+    at = s[k++]; scrub.value = at; draw();
+    if (k >= s.length) { clearInterval(playing); playing = null; ev.target.textContent = "▶"; follow = true; }
+  }, 700);
+});
+
+async function refresh() {
+  const status = document.getElementById("status");
+  try {
+    const a = q.get("a") || "", b = q.get("b") || "";
+    const res = await fetch(`/data?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    D = await res.json();
+    q.set("a", D.arms[0].run); q.set("b", D.arms[1].run);
+    for (const [id, k] of [["pickA", "a"], ["pickB", "b"]]) {
+      const sel = document.getElementById(id);
+      if (sel.dataset.key !== D.runs.join()) {
+        sel.dataset.key = D.runs.join();
+        sel.replaceChildren(...D.runs.map(r => Object.assign(document.createElement("option"), { value: r, textContent: r, selected: r === q.get(k) })));
+      }
+    }
+    scrub.max = xMax();
+    if (follow && !playing) { at = xMax(); scrub.value = at; }
+    draw();
+    status.textContent = `updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    status.textContent = "can't reach the server: " + e.message;
+  }
+}
+for (const [id, k] of [["pickA", "a"], ["pickB", "b"]]) document.getElementById(id).addEventListener("change", ev => {
+  q.set(k, ev.target.value); history.replaceState(null, "", "?" + q); for (const n in drawn) delete drawn[n]; refresh();
+});
+refresh(); setInterval(refresh, 10000);
+</script>
+</body>
+</html>

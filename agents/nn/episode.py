@@ -116,18 +116,55 @@ def count_cards(cards, state, chosen):
         cards[hand[legal[chosen]["hand"]]["id"]][1] += 1
 
 
-def play(worker, net, vocab, fight, seed, greedy=False, record=True, cards=None, *, scoring):
+def turn_row(obs):
+    """The state a turn starts from: player HP and block, enemy HP, the attack announced against the player, and Sandpit."""
+    alive = [e for e in obs["enemies"] if e["alive"]]
+    incoming = sum(x.get("damage", 0) * x.get("hits", 1) for e in alive for x in (e["intent"] or {}).get("intents", ()))
+    clock = next((p["amount"] for e in alive for p in e.get("powers", ()) if p["id"] == "POWER.SANDPIT_POWER"), None)
+    return dict(turn=obs["turn"], hp=obs["player"]["hp"], block=obs["player"]["block"],
+                boss=sum(e["hp"] for e in alive), incoming=incoming, clock=clock)
+
+
+def sandpit(obs):
+    return any(p["id"] == "POWER.SANDPIT_POWER" for e in obs["enemies"] if e["alive"] for p in e.get("powers", ()))
+
+
+def ending(res, trace, before, final):
+    """How the episode ended, and how it handled turns whose announced attack was at least HP plus block.
+
+    `before` and `final` are the last two observations. Sandpit does not deal damage: when its counter runs out at
+    the start of the enemy turn, its removal kills the player through block and HP, before any attack. So a loss
+    whose final observation lost the Sandpit power is a Sandpit loss; one still on the player's side is a loss
+    to the player's own action; any other loss is to enemy damage. A lethal turn is survived unless the
+    episode was lost on it.
+    """
+    if res["won"] or res["timeout"]:
+        cause = "win" if res["won"] else "timeout"
+    elif sandpit(before["obs"]) and not sandpit(final["obs"]):
+        cause = "sandpit"
+    else:
+        cause = "own_turn" if final["obs"].get("side") == "Player" else "attack"
+    lost = cause not in ("win", "timeout")
+    lethal = [i for i, t in enumerate(trace) if t["incoming"] > 0 and t["incoming"] >= t["hp"] + t["block"]]
+    died = sum(1 for i in lethal if lost and i == len(trace) - 1)
+    return dict(cause=cause, lethal=len(lethal), lethal_died=died)
+
+
+def play(worker, net, vocab, fight, seed, greedy=False, record=True, cards=None, trace=False, *, scoring):
     """Return (steps, result) for one episode.
 
     Steps contain (tokens, actions, chosen index, log probability). `cards` accumulates
-    playable/played counts by card ID; `record=False` omits training steps.
+    playable/played counts by card ID; `record=False` omits training steps. `trace=True` adds
+    the turn rows of turn_row and the fields of ending to the result.
     """
     state = start(worker, fight, seed)
     at_start = first(state)
-    steps = []
+    steps, turns, before = [], [], state
     hp_lost = 0
     while not over(state):
-        hp_before = state["obs"]["player"]["hp"]
+        if trace and (not turns or turns[-1]["turn"] != state["obs"]["turn"]):
+            turns.append(turn_row(state["obs"]))
+        hp_before, before = state["obs"]["player"]["hp"], state
         if not state["legal"]:
             state = worker.step(multi_pick(state))
             hp_lost += max(0, hp_before - state["obs"]["player"]["hp"])
@@ -143,5 +180,8 @@ def play(worker, net, vocab, fight, seed, greedy=False, record=True, cards=None,
             count_cards(cards, state, i)
         state = worker.step(state["legal"][i])
         hp_lost += max(0, hp_before - state["obs"]["player"]["hp"])
-    return steps, dict(outcome(state, **at_start, scoring=scoring), kind=fight["kind"], fight=fight["name"], hp_lost=hp_lost,
-                       **fight_context(fight))
+    res = dict(outcome(state, **at_start, scoring=scoring), kind=fight["kind"], fight=fight["name"], hp_lost=hp_lost,
+               **fight_context(fight))
+    if trace:
+        res.update(ending(res, turns, before, state), trace=turns, **at_start)
+    return steps, res
