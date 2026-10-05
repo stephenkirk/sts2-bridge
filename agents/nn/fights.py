@@ -13,18 +13,31 @@ from concurrent.futures import ProcessPoolExecutor
 from .contracts import character
 
 from sts2bridge import CombatWorker, spec_from_run
-from sts2bridge.fixtures import MCR, RUN
+from sts2bridge.fixtures import MCR, RUN, WIN
 
 ASCENSION = 10
 # Observed A10 entry HP is 80% of max, rounded down; native fresh-run setup starts at full HP.
 START_HP = 0.8
 
 
-def insatiable():
+def insatiable(start_turn=1):
+    """With start_turn > 1, the fight is pinned to its recording and opens on that turn of the hand-played win."""
     run = json.loads(RUN.read_text())
     spec = spec_from_run(run, "ENCOUNTER.THE_INSATIABLE_BOSS", seed=None)
-    return [dict(name="DEFECT/THE_INSATIABLE_BOSS", kind="boss", spec=spec,
-                 recording=str(MCR))]
+    fight = dict(name="DEFECT/THE_INSATIABLE_BOSS", kind="boss", spec=spec, recording=str(MCR))
+    if start_turn > 1:
+        fight.update(name=f"DEFECT/THE_INSATIABLE_BOSS@T{start_turn}", prefix=win_prefix(start_turn))
+    return [fight]
+
+
+def win_prefix(start_turn):
+    """The hand-played win's inputs before start_turn: everything up to its (start_turn - 1)th end_turn."""
+    inputs, ends = json.loads(WIN.read_text())["inputs"], 0
+    for i, action in enumerate(inputs):
+        ends += action["type"] == "end_turn"
+        if ends == start_turn - 1:
+            return inputs[:i + 1]
+    raise ValueError(f"the hand-played win has no turn {start_turn}")
 
 
 def starter(catalog):
@@ -35,7 +48,7 @@ def starter(catalog):
             for c in catalog["characters"] for e in encounters]
 
 
-def pool(name, catalog=None, pool_file=None, split="train"):
+def pool(name, catalog=None, pool_file=None, split="train", start_turn=1):
     if name == "library":
         if pool_file is None:
             raise ValueError("library needs --pool-file from agents.nn.library")
@@ -48,7 +61,7 @@ def pool(name, catalog=None, pool_file=None, split="train"):
             raise ValueError(f"library split {split} is empty")
         return fights
     if name == "insatiable":
-        return insatiable()
+        return insatiable(start_turn)
     if catalog is None:
         with CombatWorker() as w:
             catalog = w.catalog()

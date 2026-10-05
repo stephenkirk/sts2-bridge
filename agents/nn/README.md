@@ -52,6 +52,9 @@ before subsequent snapshots.
 It requires the same pool and reward/evaluation settings; legacy HP runs need `--turn-cost-hp 0`.
 `--init-from CHECKPOINT` retains weights, architecture, and vocabulary with a fresh optimizer
 and counters. Use it when changing scoring. Existing run names require `--resume`.
+With `--extend-vocab`, new IDs start as copies of the unknown row, so the branch computes the
+source's function at iteration 0. `python -m agents.nn.branch SOURCE.pt --pool P --out INIT.pt`
+extends once, so several arms can share one initialization without `--extend-vocab`.
 
 ## Dashboard and playback
 
@@ -181,6 +184,7 @@ HP changes and turn costs are paid per decision; the last decision receives the 
 reward. This lets the value head predict remaining costs from visible state.
 `--reward damage` (Insatiable default) pays 1 for a win or `0.5 * taken` otherwise.
 `--reward survival` pays 1 for a win or `0.25 * taken + 0.04 * turn` otherwise.
+`--reward win` pays 1 for a win and 0 otherwise.
 
 Logs include accepted/dropped episodes by outcome and turn band, vocabulary counts, and
 PPO metrics. Evaluation reports timeouts, HP change, HP loss among wins, and p95/maximum

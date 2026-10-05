@@ -18,15 +18,23 @@ class Scoring:
     turn_cost_hp: float = 0.05
 
     def __post_init__(self):
-        if self.reward not in {"hp", "damage", "survival"}:
+        if self.reward not in {"hp", "damage", "survival", "win"}:
             raise ValueError("unknown reward mode")
         if not math.isfinite(self.turn_cost_hp) or self.turn_cost_hp < 0:
             raise ValueError("turn_cost_hp must be finite and nonnegative")
 
 
 def send_start(worker, fight, seed):
-    """Load the recording when seed is None; otherwise start the spec without hashes and reuse its map."""
-    if seed is None:
+    """Load the recording when seed is None; otherwise start the spec without hashes and reuse its map.
+
+    A fight with a prefix ignores the seed: it replays the prefix on its recording, then asks for the boundary.
+    """
+    if fight.get("prefix"):
+        worker.load(fight["recording"], hashes=False)
+        for action in fight["prefix"]:
+            worker.step(action)
+        worker.send("observe")
+    elif seed is None:
         worker.send("load", mcr=fight["recording"], hashes=False)
     else:
         worker.send("start", spec=pools.spec(fight, seed), hashes=False, reuse_map=True)
@@ -68,6 +76,8 @@ def outcome(state, boss0, hp0, max0, *, scoring):
         reward -= scoring.turn_cost_hp * max(0, o["turn"] - 1) / max0
     elif won:
         reward = 1.0
+    elif scoring.reward == "win":
+        reward = 0.0
     elif scoring.reward == "survival":
         reward = 0.25 * taken + 0.04 * o["turn"]
     else:

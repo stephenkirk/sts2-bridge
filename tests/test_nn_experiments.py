@@ -21,7 +21,8 @@ class ExperimentTests(unittest.TestCase):
         return experiment.resolve(train.parser(), list(argv))
 
     def test_presets_resolve_and_cli_overrides_win(self):
-        for name in ("insatiable", "starter-hp", "starter-turn-cost", "library-act1"):
+        for name in ("insatiable", "insatiable-no-consolation", "insatiable-library-win",
+                     "insatiable-library-damage", "starter-hp", "starter-turn-cost", "library-act1"):
             args, meta = self.resolve('--experiment', name, '--name', 'trial', '--device', 'cpu',
                                       '--hours', '0.1', '--no-bucket', '--init-from', '/tmp/source.pt',
                                       '--pool-file', '/tmp/library.json')

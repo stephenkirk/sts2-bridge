@@ -51,17 +51,27 @@ def warm_vocab(fights, n=150, seed=0, table=None):
     return vocab
 
 
-def transfer_weights(net, state):
-    """Keep all learned embedding rows; only appended vocabulary rows are new."""
+def transfer_weights(net, state, inherited=None):
+    """Keep all learned embedding rows; only appended vocabulary rows are new.
+
+    With `inherited`, the source vocabulary's size including none and unknown, every later row starts as a copy of
+    the unknown row, spare rows included: the branch computes the source's function until training separates them.
+    """
     state = dict(state)
     old = state["ids.weight"]
-    if net.ids.weight.shape != old.shape:
+    if net.ids.weight.shape != old.shape or inherited is not None:
         if net.ids.weight.shape[0] < old.shape[0] or net.ids.weight.shape[1] != old.shape[1]:
             raise ValueError("transfer can only grow the vocabulary")
         weight = net.ids.weight.detach().clone()
         weight[:old.shape[0]] = old.to(weight.device)
+        if inherited is not None:
+            weight[inherited:] = old[1].to(weight.device)
         state["ids.weight"] = weight
     net.load_state_dict(state)
+
+
+def warm_count(pool, fights):
+    return max(150, len(fights) * (3 if pool == "library" else 1))
 
 
 # ---- processes ----
@@ -273,6 +283,8 @@ def parser():
     ap.add_argument("--pool-file", help="library curriculum manifest from agents.nn.library")
     ap.add_argument("--extend-vocab", action="store_true", help="collect training vocabulary while preserving checkpoint IDs")
     ap.add_argument("--train-on", choices=["seeds", "recorded"], default="seeds", help="recorded: the Insatiable's")
+    ap.add_argument("--start-turn", type=int, default=1,
+                    help="open the Insatiable on this turn of the hand-played win; pins every episode to the recording")
     ap.add_argument("--actors", type=int, default=5)
     ap.add_argument("--episodes", type=int, default=240, help="episodes per update")
     ap.add_argument("--hours", type=float, default=1.0)
@@ -291,7 +303,7 @@ def parser():
     ap.add_argument("--eval-prefix", default="EVAL", help="seed namespace; use a fresh prefix for a final comparison")
     ap.add_argument("--threads", type=int, default=3)
     ap.add_argument("--device", default="mps")
-    ap.add_argument("--reward", choices=["hp", "damage", "survival"],
+    ap.add_argument("--reward", choices=["hp", "damage", "survival", "win"],
                     help="default hp for the starter pool, damage for the Insatiable")
     ap.add_argument("--max-lag", type=int, default=2, help="drop episodes played by weights older than this many updates")
     ap.add_argument("--envs", type=int, default=2, help="fights each actor plays at once, one worker each")
@@ -321,6 +333,8 @@ def main(argv=None):
         ap.error("a library branch needs --extend-vocab for its new cards and encounters")
     if args.train_on == "recorded" and args.pool != "insatiable":
         ap.error("--train-on recorded needs --pool insatiable")
+    if args.start_turn != 1 and args.pool != "insatiable":
+        ap.error("--start-turn needs --pool insatiable")
     one = args.pool == "insatiable"
     args.reward = args.reward or ("damage" if one else "hp")
     args.eval_seeds = args.eval_seeds or (100 if one else 10)
@@ -333,7 +347,7 @@ def main(argv=None):
     if args.dry_run:
         print(json.dumps(experiment or dict(resolved=vars(args)), indent=2, default=str))
         return
-    fights = pools.pool(args.pool, pool_file=args.pool_file)
+    fights = pools.pool(args.pool, pool_file=args.pool_file, start_turn=args.start_turn)
     eval_fights = pools.pool(args.pool, pool_file=args.pool_file, split="validation") if args.pool == "library" else fights
     pool_metadata = {}
     if args.pool == "library":
@@ -399,7 +413,7 @@ def main(argv=None):
     torch.set_num_threads(args.threads)
 
     t0 = time.time()
-    warm_episodes = max(150, len(fights) * (3 if args.pool == "library" else 1))
+    warm_episodes = warm_count(args.pool, fights)
     if initial:
         vocab, cfg = Vocab(initial["vocab"], frozen=True), initial["cfg"]
         if args.extend_vocab:
@@ -416,7 +430,7 @@ def main(argv=None):
     net = Net(**cfg).to(args.device)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr)
     if initial:
-        transfer_weights(net, initial["state"])
+        transfer_weights(net, initial["state"], inherited=len(initial["vocab"]) + 2 if args.extend_vocab else None)
     if resumed:
         if "opt" in resumed:
             opt.load_state_dict(resumed["opt"])

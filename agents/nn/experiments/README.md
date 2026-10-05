@@ -7,6 +7,9 @@ encoding, models, and PPO stay in the parent directory; these files only declare
 | Definition | Question | Required local inputs |
 |---|---|---|
 | `insatiable.json` | Can damage reward learn the pinned boss loadout across fresh shuffles? | None |
+| `insatiable-no-consolation.json` | Does paying nothing for losses make the Insatiable policy block instead of dying for damage? | None |
+| `insatiable-library-win.json` | Does win-only reward improve library weights on the Insatiable more than damage reward? | `--init-from` from `agents.nn.branch` |
+| `insatiable-library-damage.json` | Control arm: the same library weights under damage reward. | `--init-from` from `agents.nn.branch` |
 | `starter-hp.json` | Can HP reward improve starter-deck play? | None |
 | `starter-turn-cost.json` | Can a turn cost prevent stalling from pre-stall weights? | `--init-from` |
 | `library-act1.json` | Does a starter-deck policy improve on real Act 1 loadouts, regulars, and elites without losing weak fights? | `--init-from`, `--pool-file` |

@@ -48,6 +48,12 @@ class TrainingTests(unittest.TestCase):
         self.assertEqual(res["reward"], 1)
         self.assertEqual(episode.step_rewards([60, 59], res, 75, [1, 3], scoring=self.scoring), [0, 1])
 
+    def test_win_reward_pays_nothing_for_losses(self):
+        self.scoring = episode.Scoring("win", 0)
+        self.assertEqual(self.result()["reward"], 1)
+        self.assertEqual(self.result(hp=0, alive=True)["reward"], 0)
+        self.assertEqual(self.result(hp=60, turn=31, terminal=False, alive=True)["reward"], 0)
+
     def test_scoring_calls_do_not_contaminate_each_other(self):
         hp = self.result()["reward"]
         self.scoring = episode.Scoring("survival", 0)
@@ -129,6 +135,15 @@ class TrainingTests(unittest.TestCase):
         for key, value in old.state_dict().items():
             if key != "ids.weight":
                 self.assertTrue(torch.equal(value, new.state_dict()[key]), key)
+
+    def test_extended_rows_start_as_the_unknown_row(self):
+        from agents.nn.model import Net
+        old = Net(vocab_size=8, d=8, layers=1)
+        new = Net(vocab_size=12, d=8, layers=1)
+        train.transfer_weights(new, old.state_dict(), inherited=4)  # none, unknown, two known IDs
+        self.assertTrue(torch.equal(old.ids.weight[:4], new.ids.weight[:4]))
+        for row in range(4, 12):  # spare source rows and appended rows alike
+            self.assertTrue(torch.equal(new.ids.weight[row], old.ids.weight[1]), row)
 
     def test_unknown_diagnostics_preserve_frozen_vocabulary(self):
         from agents.nn.encode import Vocab

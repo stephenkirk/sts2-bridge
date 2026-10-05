@@ -5,7 +5,7 @@ These are dated observations, not operating prerequisites. Checkpoints, run logs
 available in a fresh checkout. See the [usage guide](../agents/nn/README.md) for reproducible
 commands and [design limits](nn-design.md) for the scope of the evidence.
 
-[Earlier runs](nn-experiments-2026-09-30.md); [commands](../agents/nn/README.md).
+[Earlier runs](nn-experiments-2026-09-30.md); [later results](nn-experiments-2026-10-05.md); [commands](../agents/nn/README.md).
 Figures checked against local logs and paired comparisons.
 
 ## Turn cost stops the Slimes stall — 2026-09-30
