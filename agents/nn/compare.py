@@ -52,18 +52,23 @@ def arm(run):
                               recorded=ev.get("recorded_greedy") and {k: ev["recorded_greedy"][k] for k in ("won", "hp", "boss", "turn")},
                               recorded_sampled=ev.get("recorded_sampled_win"), each=ev.get("heldout_fights")))
     return dict(run=run, metadata=run_metadata(sessions), rows=rows, evals=sorted(evals, key=lambda e: e["fights"]),
-                probe=sorted(lines(RUNS / run / "probe.jsonl"), key=lambda p: p["fights"]))
+                probe=sorted({p["snapshot"]: p for p in lines(RUNS / run / "probe.jsonl")}.values(), key=lambda p: p["fights"]))
 
 
 def turn5(rows):
-    """Hand-win probe rows [(turn, move, p(move), top, p(top))] reduced to the decisions this experiment watches."""
+    """Hand-win probe rows [(turn, move, p(move), top, p(top))] reduced to the decisions this experiment watches.
+
+    The hand win plays Synchronize+, Hologram+ -> Boot Sequence+, Boot Sequence+, Quadcast on turn 5, so `quadcast` is
+    p(Quadcast) with Synchronize+'s Focus already up: the evoke the win spent it on.
+    """
     t5 = [r for r in rows if r[0] == 5]
     pick = lambda name: next((r[2] for r in t5 if r[1] == name), None)
     joint = {}
     for t, _, p, _, _ in rows:
         joint[t] = joint.get(t, 1.0) * p
     return dict(sync_first=t5[0][2] if t5 and t5[0][1] == "CARD.SYNCHRONIZE+" else None,
-                boot=pick("-> CARD.BOOT_SEQUENCE+"), top_after_hologram=next((r[3] for r in t5 if r[1].startswith("->")), None),
+                boot=pick("-> CARD.BOOT_SEQUENCE+"), quadcast=pick("CARD.QUADCAST"),
+                top_at_quadcast=next((r[3] for r in t5 if r[1] == "CARD.QUADCAST"), None), top_after_hologram=next((r[3] for r in t5 if r[1].startswith("->")), None),
                 joint={str(k): v for k, v in joint.items()})
 
 
@@ -88,7 +93,7 @@ class Probe:
             while True:
                 for run in list(self.wanted):
                     path = RUNS / run / "probe.jsonl"
-                    seen = {p["snapshot"] for p in lines(path)}
+                    seen = {p["snapshot"] for p in lines(path) if "quadcast" in p}  # older rows are probed again
                     for snap in sorted((RUNS / run / "snapshots").glob("it*.pt")):
                         if snap.name in seen:
                             continue

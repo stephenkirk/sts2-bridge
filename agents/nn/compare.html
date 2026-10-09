@@ -357,7 +357,7 @@ function lethal() {
 
 function probe() {
   const box = document.getElementById("probe"); box.replaceChildren();
-  for (const [key, name] of [["sync_first", "p(Synchronize+ first)"], ["boot", "p(Hologram+ → Boot Sequence+)"]]) {
+  for (const [key, name] of [["boot", "p(Hologram+ → Boot Sequence+)"], ["quadcast", "p(Quadcast after Synchronize+)"]]) {
     const panel = text("div", "", box); text("h3", name, panel);
     const now = text("div", "", panel, "counts mono");
     now.textContent = D.arms.map(a => `${label(a)} ${fmt(probeAt(a, at)?.[key], 3)}`).join(" · ");

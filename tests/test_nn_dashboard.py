@@ -86,10 +86,12 @@ class CompareTests(unittest.TestCase):
 
     def test_turn5_picks_the_watched_decisions(self):
         rows = [(4, "CARD.TURBO+", .5, "CARD.TURBO+", .5), (5, "CARD.SYNCHRONIZE+", .1, "CARD.HOLOGRAM+", .8),
-                (5, "CARD.HOLOGRAM+", .9, "CARD.HOLOGRAM+", .9), (5, "-> CARD.BOOT_SEQUENCE+", .02, "-> CARD.REFRACT+", .7)]
+                (5, "CARD.HOLOGRAM+", .9, "CARD.HOLOGRAM+", .9), (5, "-> CARD.BOOT_SEQUENCE+", .02, "-> CARD.REFRACT+", .7),
+                (5, "CARD.QUADCAST", .3, "CARD.SMOKESTACK+", .6)]
         out = compare.turn5(rows)
         self.assertEqual((out["sync_first"], out["boot"], out["top_after_hologram"]), (.1, .02, "-> CARD.REFRACT+"))
-        self.assertAlmostEqual(out["joint"]["5"], .1 * .9 * .02)
+        self.assertEqual((out["quadcast"], out["top_at_quadcast"]), (.3, "CARD.SMOKESTACK+"))
+        self.assertAlmostEqual(out["joint"]["5"], .1 * .9 * .02 * .3)
 
     def test_arm_sorts_evaluations_and_merges_card_counts(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(compare, "RUNS", Path(tmp)):
@@ -101,10 +103,11 @@ class CompareTests(unittest.TestCase):
             rows = [dict(args=dict(reward="win")), dict(it=2, episodes=20, min=1, eval=ev(2), **base),
                     dict(it=3, episodes=30, min=1, eval=ev(0), **base)]
             (run / "log.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + '\n{"it":')
-            (run / "probe.jsonl").write_text(json.dumps(dict(snapshot="it00000.pt", fights=0, boot=.01)) + "\n")
+            (run / "probe.jsonl").write_text(json.dumps(dict(snapshot="it00000.pt", fights=0, boot=.01)) + "\n" +
+                                             json.dumps(dict(snapshot="it00000.pt", fights=0, boot=.01, quadcast=.3)) + "\n")
             out = compare.arm("w")
             self.assertEqual([e["it"] for e in out["evals"]], [0, 2])
             self.assertEqual(out["evals"][0]["cards"], {"CARD.ZAP": [4, 1]})
             self.assertEqual(out["evals"][0]["each"], [dict(seed=0, won=True)])
             self.assertEqual(out["metadata"]["reward"], "win")
-            self.assertEqual(out["probe"][0]["boot"], .01)
+            self.assertEqual(out["probe"], [dict(snapshot="it00000.pt", fights=0, boot=.01, quadcast=.3)])
