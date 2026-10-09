@@ -1,4 +1,4 @@
-# Insatiable revisited, 2026-10-05–06
+# Insatiable revisited, 2026-10-05–09
 
 Dated observations; checkpoints, logs and `.context` scripts are local. [Earlier results](nn-experiments-2026-10-01.md).
 
@@ -49,5 +49,33 @@ unknown, including the boss, Sandpit, Quadcast and Synchronize. Wins ended on 2�
 On the recorded deal: 0/100 sampled; greedy matched the hand-played win for four turns, then died on turn 5.
 It played Quadcast before Synchronize+ and fetched Refract+ instead of blocking. p(Boot Sequence+) 0.005; p(Synchronize+ first) 0.05.
 
-Next: `damage` and `win` arms from these weights with `--extend-vocab`, 20 minutes, compared at matched fights.
+Planned: `damage` and `win` arms from these weights with `--extend-vocab`, 20 minutes, compared at matched fights.
 The shared start cancels between arms; results describe refining a generalist, not the deleted checkpoint.
+
+## Two arms, one hour (2026-10-06)
+
+Both arms started from `library-act1-it200-insatiable.pt`, with new IDs copied from the unknown row, so iteration 0 is identical.
+`agents.nn.pair`, `--actors 3`, `--hours 1`: about 64k fights each, 27 evaluations each on the 100 `EVAL` seeds.
+Iteration 0 won 3/100 `EVAL` seeds (the 7/100 above was on `LIBPROBE` seeds).
+For 30 minutes the arms were indistinguishable. After about 40k fights, `win` evaluations scored 8–12, `damage` 4–8.
+Last five evaluations pooled: `win` 49/500, `damage` 30/500. These replay the same seeds, so they aren't independent.
+Sandpit doesn't deal damage: its removal kills before the attack, so a final observation without it marks a Sandpit loss.
+`damage` ended with 32–39 Sandpit losses per 100 and 62% of boss HP removed in losses: damage dealt until the clock runs out.
+`win` cut Sandpit losses from 36 to 16–21 and survived more lethal turns (58% vs 50%), dealing less damage in losses.
+Recorded deal: `win` survived turn 5 from 38k fights on and lost on turn 7 in its last six evaluations, boss on 22, 16, 15, 16, 1, 24.
+`damage` died on turn 5 in every evaluation of the run.
+Turn-5 probe, after both swapped back and forth early on: `win` took Hologram+ → Boot Sequence+, `damage` Quadcast after Synchronize+ (0.94).
+Each arm learned half of the hand-played turn 5: the block, or the evoke. `win`'s line skipped Quadcast and dealt 44 to the win's 97.
+Synchronize+ order is irrelevant there: Hologram+ and Boot Sequence+ don't touch orbs. The missed decision is Quadcast.
+Watching p(Synchronize+ first) was a mistake I only saw post hoc; the probe now records p(Quadcast after Synchronize+).
+
+## Untouched seeds and the winnable bank (2026-10-08)
+
+200 `INSATIABLE-LIBRARY-FINAL-NEW` seeds, greedy, played once by five checkpoints:
+start 5, `win` iteration 260 14, `damage` iteration 260 9, `win` best (iteration 230) 17, `damage` best (iteration 220) 14.
+Exact McNemar: `win` vs start p 0.035 and 0.004; `damage` vs start 0.34 and 0.049; `win` vs `damage` 0.33 and 0.66.
+Lethal turns survived: start 45%, `win` 58–59%, `damage` 51–53%. The arms share 3 of their 20 wins at iteration 260.
+Bank: the 54 greedy evaluations won 30 of the 100 `EVAL` seeds at least once; any one late snapshot won 6–12.
+Twenty sampled attempts per bank seed: start 42/600, `win` 144/600, `damage` 109/600; on the 17 seeds both arms found, 38, 124, 82.
+Each arm stopped winning about 8 seeds it had won earlier in training. Sampling wins far more of the bank than greedy play.
+The bank is selected by these arms' own wins, and the `EVAL` seeds are now curriculum. `FINAL-NEW` has been used once.
