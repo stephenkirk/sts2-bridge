@@ -48,7 +48,8 @@ static class Worker
         Console.SetOut(Console.Error);
         var boot = Stopwatch.StartNew();
         Substrate.Boot();
-        protocol.WriteLine(JsonSerializer.Serialize(new { ok = true, ready = true, boot_ms = boot.Elapsed.TotalMilliseconds }, Json));
+        protocol.WriteLine(JsonSerializer.Serialize(new { ok = true, ready = true, boot_ms = boot.Elapsed.TotalMilliseconds,
+                                                        game_lib = Sts2Resolver.LibraryPath }, Json));
 
         CombatSession? session = null;
         RunSession? runSession = null;

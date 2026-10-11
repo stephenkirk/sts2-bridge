@@ -2,7 +2,13 @@
 
 import tempfile
 import unittest
-from unittest.mock import patch
+import contextlib
+import hashlib
+import io
+import json
+import queue
+import sys
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 try:
@@ -16,6 +22,72 @@ except ImportError:
 class TrainingTests(unittest.TestCase):
     def setUp(self):
         self.scoring = episode.Scoring("hp", 0.05)
+
+    def test_prepared_library_starts_two_arms_without_warmup_or_weight_changes(self):
+        from agents.nn import branch
+        from agents.nn.encode import Vocab
+        from agents.nn.model import Net
+
+        class Context:
+            Queue = queue.Queue
+            Process = Mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = root / "library.json"
+            manifest.write_text('{"library": "fixture"}')
+            source, prepared = root / "source.pt", root / "prepared.pt"
+            cfg = dict(vocab_size=8, d=8, layers=1)
+            net = Net(**cfg)
+            torch.save(dict(cfg=cfg, state=net.state_dict(), vocab={"global": 2}, pool="starter"), source)
+            fight = dict(name="DEFECT/F", kind="monster", spec=dict(character="CHARACTER.DEFECT"))
+            with patch.object(sys, "argv", ["branch", str(source), "--pool", "library", "--pool-file", str(manifest),
+                                            "--out", str(prepared)]), patch.object(branch.pools, "pool", return_value=[fight]), \
+                    patch.object(branch, "warm_vocab", return_value=Vocab({"global": 2, "card:NEW": 3}, frozen=True)), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                branch.main()
+            init = torch.load(prepared, weights_only=False)
+            self.assertEqual(init["pool_digest"], hashlib.sha256(manifest.read_bytes()).hexdigest())
+            self.assertEqual(init["pool_file"], str(manifest.resolve()))
+            for name in ("arm-a", "arm-b"):
+                with patch.object(train, "HERE", root), patch.object(train.pools, "pool", return_value=[fight]), \
+                        patch.object(train, "warm_vocab", side_effect=AssertionError("repeated warmup")), \
+                        patch.object(train.mp, "get_context", return_value=Context()), contextlib.redirect_stdout(io.StringIO()):
+                    train.main(["--experiment", "library-act1", "--name", name, "--pool-file", str(manifest),
+                                "--init-from", str(prepared), "--no-extend-vocab", "--hours", "0", "--actors", "0", "--device", "cpu"])
+                snapshot = torch.load(root / "runs" / name / "snapshots" / "it00000.pt", weights_only=False)
+                self.assertEqual(snapshot["vocab"], init["vocab"])
+                for key, value in init["state"].items():
+                    self.assertTrue(torch.equal(snapshot["state"][key], value), key)
+
+    def test_library_initialization_requires_matching_provenance_or_extension(self):
+        train.check_initialization(dict(pool="library", pool_digest="same"), "library", "same", False)
+        for initial in (dict(pool="starter"), dict(pool="library"), dict(pool="library", pool_digest="different")):
+            with self.subTest(initial=initial), self.assertRaises(ValueError):
+                train.check_initialization(initial, "library", "same", False)
+            train.check_initialization(initial, "library", "same", True)
+
+    def test_evaluator_records_the_actual_exam_and_full_seeds(self):
+        from agents.nn.model import Net
+        cfg = dict(vocab_size=8, d=8, layers=1)
+        net = Net(**cfg)
+        weights, output = queue.Queue(), queue.Queue()
+        weights.put((0, net.state_dict(), 0))
+        weights.put(("stop", None, None))
+        result = dict(self.result(), kind="boss", fight="F", character="DEFECT", hp_lost=1,
+                      hp0=60, boss0=20, cause="win", lethal=0, lethal_died=0,
+                      trace=[dict(hp=60, boss=20, incoming=0)])
+        fight = dict(name="F", kind="boss", spec=dict(character="CHARACTER.DEFECT"))
+        with patch.object(train, "CombatWorker"), patch.object(train, "play", return_value=([], result)) as play, \
+                patch.object(train, "runtime_identity", return_value={"game/sts2.dll": "v1", "worker/CombatWorker.dll": "v1",
+                                                                      "worker/GodotSharp.dll": "v1", "python/episode.py": "v1",
+                                                                      "python/worker.py": "v1"}):
+            train.evaluator(cfg, {}, weights, output, [fight], 2, 0, "win", 0, "EXAM")
+        ev = output.get_nowait()
+        self.assertEqual([call.args[4] for call in play.call_args_list], ["EXAM-0", "EXAM-1"])
+        self.assertEqual([r["seed"] for r in ev["heldout_fights"]], ["EXAM-0", "EXAM-1"])
+        self.assertEqual(ev["conditions"]["seeds"], ["EXAM-0", "EXAM-1"])
+        self.assertEqual(ev["conditions"]["execution"]["max_turns"], episode.MAX_TURNS)
 
     def result(self, hp=59, turn=3, terminal=True, alive=False):
         state = dict(boundary="terminal" if terminal else "awaiting_input",

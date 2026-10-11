@@ -8,6 +8,8 @@ still match the recording 49/49. Needs ``./setup.sh``; without it the tests skip
 """
 
 import re
+import os
+from pathlib import Path
 import shutil
 import subprocess
 import unittest
@@ -131,6 +133,10 @@ class StepWorkerTests(unittest.TestCase):
 
     def test_real_saves_untouched(self):
         self.assertEqual(save_dir_snapshot(), self.saves_before)
+
+    def test_boot_reports_the_game_library_actually_resolved(self):
+        expected = Path(os.environ.get("STS2_LIB") or LIB.parent).resolve()
+        self.assertEqual(Path(self.worker.game_lib), expected)
 
 
 def _normalise(context):

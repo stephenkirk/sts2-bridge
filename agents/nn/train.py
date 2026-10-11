@@ -24,9 +24,9 @@ from sts2bridge import CombatWorker
 from . import fights as pools
 from .encode import Vocab, collate, encode
 from .model import Net
-from .contracts import character
+from .contracts import character, evaluation_conditions, runtime_identity
 from .experiment import record as record_experiment, resolve as resolve_experiment
-from .episode import (Scoring, fight_context, first, multi_pick, outcome, over,
+from .episode import (MAX_TURNS, Scoring, fight_context, first, multi_pick, outcome, over,
                       play, send_start, start, step_rewards)
 from .metrics import acceptance_summary, mean, summary
 
@@ -72,6 +72,16 @@ def transfer_weights(net, state, inherited=None):
 
 def warm_count(pool, fights):
     return max(150, len(fights) * (3 if pool == "library" else 1))
+
+
+def check_initialization(initial, pool, pool_digest, extend_vocab):
+    """A frozen library vocabulary can be reused only for its saved manifest."""
+    if extend_vocab:
+        return
+    if initial.get("pool") != pool:
+        raise ValueError(f"initialization trained on --pool {initial.get('pool')}; use --extend-vocab")
+    if pool == "library" and (not pool_digest or initial.get("pool_digest") != pool_digest):
+        raise ValueError("library initialization needs a matching saved manifest digest; use --extend-vocab")
 
 
 # ---- processes ----
@@ -157,7 +167,9 @@ def evaluator(cfg, vocab_table, weights_q, out_q, fights, n_seeds, n_sampled, re
     torch.set_num_threads(1)
     vocab = Vocab(vocab_table, frozen=True)
     net = Net(**cfg).eval()
+    seeds = [f"{eval_prefix}-{i}" for i in range(n_seeds)]
     with CombatWorker() as w:
+        conditions = evaluation_conditions(fights, seeds, max_turns=MAX_TURNS, build=runtime_identity(w.game_lib))
         evaluated_initial = False
         while True:
             item = weights_q.get()
@@ -170,12 +182,12 @@ def evaluator(cfg, vocab_table, weights_q, out_q, fights, n_seeds, n_sampled, re
             t0 = time.time()
             vocab = Vocab(vocab_table, frozen=True)  # diagnostics for this evaluation only
             cards = {}  # character -> card id -> [decisions playable, decisions played]
-            results = [play(w, net, vocab, f, f"{eval_prefix}-{i}", greedy=True, record=False,
+            results = [play(w, net, vocab, f, seed, greedy=True, record=False,
                             cards=cards.setdefault(character(f), {}), trace=True, scoring=scoring)[1]
-                       for f in fights for i in range(n_seeds)]
-            ev = dict(version=version, episodes=episode_count, heldout=summary(results, fights=True))
+                       for f in fights for seed in seeds]
+            ev = dict(version=version, episodes=episode_count, conditions=conditions, heldout=summary(results, fights=True))
             ev["heldout_cards"] = cards
-            ev["heldout_fights"] = [fight_row(r, i % n_seeds) for i, r in enumerate(results)]
+            ev["heldout_fights"] = [fight_row(r, seeds[i % n_seeds]) for i, r in enumerate(results)]
             ev["heldout_vocab"] = vocab.diagnostics()
             recorded = [f for f in fights if f.get("recording")]
             if len(recorded) == 1:
@@ -290,7 +302,8 @@ def parser():
     ap.add_argument("--name", required=True)
     ap.add_argument("--pool", choices=["starter", "insatiable", "library"], default="starter")
     ap.add_argument("--pool-file", help="library curriculum manifest from agents.nn.library")
-    ap.add_argument("--extend-vocab", action="store_true", help="collect training vocabulary while preserving checkpoint IDs")
+    ap.add_argument("--extend-vocab", action=argparse.BooleanOptionalAction, default=False,
+                    help="collect training vocabulary while preserving checkpoint IDs; disable for a prepared initialization")
     ap.add_argument("--train-on", choices=["seeds", "recorded"], default="seeds", help="recorded: the Insatiable's")
     ap.add_argument("--actors", type=int, default=5)
     ap.add_argument("--episodes", type=int, default=240, help="episodes per update")
@@ -336,8 +349,6 @@ def main(argv=None):
         ap.error("--pool library requires --pool-file")
     if args.resume and args.extend_vocab:
         ap.error("vocabulary extension needs a new branch, not --resume")
-    if args.init_from and args.pool == "library" and not args.extend_vocab:
-        ap.error("a library branch needs --extend-vocab for its new cards and encounters")
     if args.train_on == "recorded" and args.pool != "insatiable":
         ap.error("--train-on recorded needs --pool insatiable")
     one = args.pool == "insatiable"
@@ -387,8 +398,10 @@ def main(argv=None):
     initial = resumed
     if args.init_from:
         initial = torch.load(args.init_from, weights_only=False)
-        if initial.get("pool") != args.pool and not args.extend_vocab:
-            ap.error(f"{args.init_from} trained on --pool {initial.get('pool')}")
+        try:
+            check_initialization(initial, args.pool, scoring.get("pool_digest"), args.extend_vocab)
+        except ValueError as exc:
+            ap.error(str(exc))
     out.mkdir(parents=True, exist_ok=True)
     try:
         experiment = record_experiment(out, experiment, args.resume)
@@ -539,6 +552,7 @@ def main(argv=None):
     eval_q.put(("stop", None, None))
     for p in procs:
         p.join(timeout=10)
+    log.close()
 
 
 if __name__ == "__main__":

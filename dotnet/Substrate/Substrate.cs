@@ -15,13 +15,16 @@ using MegaCrit.Sts2.Core.Runs;
 // No sts2 types in here: it runs before the resolver can find sts2.dll.
 static class Sts2Resolver
 {
+    public static string LibraryPath { get; private set; } = "";
+
     public static void Install(Assembly entry)
     {
         string lib = Environment.GetEnvironmentVariable("STS2_LIB")
             ?? entry.GetCustomAttributes<AssemblyMetadataAttribute>().Single(a => a.Key == "Sts2Lib").Value!;
+        LibraryPath = Path.GetFullPath(lib);
         AssemblyLoadContext.Default.Resolving += (ctx, name) =>
         {
-            string p = Path.Combine(lib, name.Name + ".dll");
+            string p = Path.Combine(LibraryPath, name.Name + ".dll");
             return File.Exists(p) ? ctx.LoadFromAssemblyPath(Path.GetFullPath(p)) : null;
         };
     }

@@ -55,6 +55,15 @@ and counters. Use it when changing scoring. Existing run names require `--resume
 With `--extend-vocab`, new IDs start as copies of the unknown row, so the branch computes the
 source's function at iteration 0. `python -m agents.nn.branch SOURCE.pt --pool P --out INIT.pt`
 extends once, so several arms can share one initialization without `--extend-vocab`.
+For a library, the prepared checkpoint records the manifest's digest. Training can reuse
+it with the same manifest; a changed or unrecorded manifest requires vocabulary extension.
+Use `--no-extend-vocab` to override a preset that normally extends it:
+
+```sh
+.venv/bin/python -m agents.nn.branch SOURCE.pt --pool library --pool-file library.json --out INIT.pt
+.venv/bin/python -m agents.nn.train --experiment library-act1 --name arm-a \
+  --pool-file library.json --init-from INIT.pt --no-extend-vocab
+```
 
 ## Dashboard and playback
 
@@ -93,6 +102,11 @@ cause (enemy damage, Sandpit, the player's own action, or timeout; Sandpit's rem
 the attack, so its disappearance identifies those losses), lethal turns faced and died on, and the HP and
 boss HP at each turn start. For Insatiable runs, a background worker probes every snapshot along the hand-played
 win and writes the turn-5 probabilities to `runs/<name>/probe.jsonl`.
+Each new evaluation records the fight-specification digests, full seeds, game/bridge build,
+and execution method. The dashboard checks the selected evaluations before showing paired
+seed outcomes and card-rate differences. Different exams or missing metadata keep the
+individual curves visible and mark paired views unavailable. Historical evaluations are
+not certified from the current files or latest session settings.
 
 Watch a checkpoint play:
 

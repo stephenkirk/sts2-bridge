@@ -40,6 +40,12 @@ class ExperimentTests(unittest.TestCase):
         self.assertIsNone(args.init_from)
         self.assertFalse(args.extend_vocab)
 
+    def test_prepared_initialization_can_disable_preset_vocabulary_extension(self):
+        args, meta = self.resolve('--experiment', 'library-act1', '--name', 'prepared',
+                                  '--init-from', '/tmp/prepared.pt', '--pool-file', '/tmp/library.json', '--no-extend-vocab')
+        self.assertFalse(args.extend_vocab)
+        self.assertFalse(meta['resolved']['extend_vocab'])
+
     def test_resume_does_not_hide_conflicting_explicit_initialization(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             train.main(['--experiment', 'starter-hp', '--name', 'trial', '--resume',

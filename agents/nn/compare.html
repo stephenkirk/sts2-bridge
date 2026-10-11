@@ -73,6 +73,7 @@ footer p { margin: 0 0 6px; }
     <span class="status" id="status">loading…</span>
   </header>
   <div class="arms" id="arms"></div>
+  <p class="sub" id="conditions"></p>
   <div class="scrub">
     <button id="play" aria-label="Play through snapshots">▶</button>
     <input type="range" id="scrub" min="0" max="0" step="1" value="0" aria-label="Fights played">
@@ -84,7 +85,7 @@ footer p { margin: 0 0 6px; }
       <p class="sub">Greedy play on the held-out seeds, with a 95% band. Thin line: sampled training fights, mean of the last 10 updates.</p>
       <div id="wins"></div></div>
     <div class="card"><h2>Wins against damage dealt in losses</h2>
-      <p class="sub">One point per evaluation. Up is the damage reward's consolation; right is winning. Both arms start at the same point.</p>
+      <p class="sub">One point per evaluation. Up is the damage reward's consolation; right is winning.</p>
       <div id="diverge"></div></div>
   </div>
 
@@ -108,7 +109,7 @@ footer p { margin: 0 0 6px; }
   </div>
 
   <div class="card seeds"><h2>Held-out seeds won</h2>
-    <p class="sub">One column per seed, one row per evaluation, earliest at the top. Filled: won. The outlined row is the selected fight count.</p>
+    <p class="sub">One column per seed, one row per evaluation with the selected conditions, earliest at the top. Filled: won. The outlined row is the selected fight count.</p>
     <div class="counts mono" id="seedCounts"></div>
     <div id="seeds"></div></div>
 
@@ -214,6 +215,9 @@ const q = new URLSearchParams(location.search);
 let D = null, at = 0, follow = true, playing = null;
 const evalAt = (arm, x) => arm.evals.reduce((best, e) => e.fights <= x ? e : best, null) || arm.evals[0] || null;
 const probeAt = (arm, x) => arm.probe.reduce((best, p) => p.fights <= x ? p : best, null);
+const comparisonFor = (a, b) => D.checks?.[`${a?.condition_id || "unknown"}/${b?.condition_id || "unknown"}`] ||
+  { status: "unknown", reason: "Evaluation conditions are missing or incomplete; paired results are unavailable." };
+const selectedComparison = () => comparisonFor(...D.arms.map(a => evalAt(a, at)));
 const color = i => css(ARMS[i]);
 const label = arm => arm.run;
 const lossShare = e => { const ls = (e.each || []).filter(r => !r.won); return ls.length ? mean(ls.map(r => (r.boss0 - r.boss) / r.boss0)) : null; };
@@ -232,6 +236,8 @@ function header() {
   });
   document.getElementById("title").textContent = `${D.arms[0].run} vs ${D.arms[1].run}`;
   document.title = `${D.arms[0].run} vs ${D.arms[1].run}`;
+  const check = selectedComparison();
+  document.getElementById("conditions").textContent = `Evaluation conditions: ${check.status}. ${check.reason}`;
 }
 
 function wins() {
@@ -243,8 +249,7 @@ function wins() {
     const smooth = a.rows.map((r, k) => [r.fights, mean(a.rows.slice(Math.max(0, k - 9), k + 1).map(x => x.train_win))]);
     series.push({ label: `${label(a)} sampled`, color: color(i), width: 1, opacity: .7, points: smooth });
   });
-  const start = D.arms[0].evals[0];
-  overFights(box, { series, refs: start ? [{ y: start.win, label: "start" }] : [] });
+  overFights(box, { series });
 }
 
 function diverge() {
@@ -298,7 +303,10 @@ function ends() {
     text("div", `won ${n("win")} · enemy damage ${n("attack")} · Sandpit ${n("sandpit")} · own action ${n("own_turn")} · timeout ${n("timeout")} · mean last turn ${fmt(mean(e.each.map(r => r.turn)))}`, panel, "counts mono");
     const f = frame(panel, { x0: .5, x1: tMax + .5, y0: 0, y1: bMax, height: 200, xFmt: v => String(Math.round(v)), yFmt: v => fmt(v, 0), xLabel: "last turn" });
     S("text", { x: f.L + 2, y: f.T + 9 }, f.svg).textContent = "boss HP left";
-    const jit = r => ((r.seed * 37) % 11 / 10 - .5) * .6;
+    const jit = r => {
+      const h = [...String(r.seed)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 0);
+      return (h % 11 / 10 - .5) * .6;
+    };
     const first = a.evals[0];
     if (first?.each && first !== e) for (const r of first.each) marker(f.svg, r.cause, f.X(r.turn + jit(r)), f.Y(r.boss), css("--ghost"), 3);
     for (const r of e.each) {
@@ -375,38 +383,41 @@ function probe() {
 
 function seeds() {
   const box = document.getElementById("seeds"); box.replaceChildren();
-  const key = r => `${r.fight}#${r.seed}`;
-  const cols = [...new Set(D.arms.flatMap(a => a.evals.flatMap(e => (e.each || []).map(key))))];
+  const c = document.getElementById("seedCounts"); c.textContent = "";
+  const check = selectedComparison();
+  if (check.status !== "matching") { text("p", check.reason, box, "sub"); return; }
+  const shown = D.arms.map(a => evalAt(a, at));
+  const histories = D.arms.map((a, i) => a.evals.filter(e => e.each && e.condition_id === shown[i].condition_id));
+  const key = r => JSON.stringify([r.fight, r.seed]);
+  const cols = [...new Set(histories.flatMap(es => es.flatMap(e => e.each.map(key))))];
   if (!cols.length) { text("p", "no per-fight rows yet", box, "sub"); return; }
   const idx = Object.fromEntries(cols.map((k, j) => [k, j]));
-  const cw = 6, gap = 1, W = cols.length * (cw + gap), rowsPerArm = D.arms.map(a => a.evals.filter(e => e.each).length);
+  const cw = 6, gap = 1, W = cols.length * (cw + gap), rowsPerArm = histories.map(es => es.length);
   const H = rowsPerArm.reduce((s, n) => s + n * (cw + gap) + 22, 0);
   const svg = S("svg", { viewBox: `0 0 ${W + 4} ${H}`, role: "img" }, box);
   svg.style.maxWidth = (W + 4) * 1.4 + "px";
   let y = 0;
-  const shown = D.arms.map(a => evalAt(a, at));
   D.arms.forEach((a, i) => {
     S("text", { x: 0, y: y + 11 }, svg).textContent = label(a);
     y += 16;
-    for (const e of a.evals.filter(e => e.each)) {
+    for (const e of histories[i]) {
       const won = new Map(e.each.map(r => [key(r), r]));
       for (const k of cols) {
         const r = won.get(k), cell = S("rect", { class: "cell", x: idx[k] * (cw + gap), y, width: cw, height: cw, rx: 1,
           fill: r?.won ? color(i) : css("--grid") }, svg);
-        hover(cell, `${label(a)} · seed ${k.split("#")[1]} · it ${e.it}`, () => [{ value: r ? (r.won ? "won" : CAUSES[r.cause]) : "not played", label: r ? `turn ${r.turn}` : "" }]);
+        hover(cell, `${label(a)} · seed ${JSON.parse(k)[1]} · it ${e.it}`, () => [{ value: r ? (r.won ? "won" : CAUSES[r.cause]) : "not played", label: r ? `turn ${r.turn}` : "" }]);
       }
       if (e === shown[i]) S("rect", { x: -1.5, y: y - 1.5, width: W + 2, height: cw + 3, fill: "none", stroke: css("--text-primary"), "stroke-width": 1, rx: 2 }, svg);
       y += cw + gap;
     }
     y += 6;
   });
-  const c = document.getElementById("seedCounts");
   if (shown.every(e => e?.each)) {
     const w = shown.map(e => new Set(e.each.filter(r => r.won).map(key)));
-    const first = D.arms.map(a => new Set((a.evals[0]?.each || []).filter(r => r.won).map(key)));
+    const first = histories.map(es => new Set((es[0]?.each || []).filter(r => r.won).map(key)));
     const gained = i => [...w[i]].filter(k => !first[i].has(k)).length, lost = i => [...first[i]].filter(k => !w[i].has(k)).length;
     c.textContent = `both ${[...w[0]].filter(k => w[1].has(k)).length} · only ${label(D.arms[0])} ${[...w[0]].filter(k => !w[1].has(k)).length} · ` +
-      `only ${label(D.arms[1])} ${[...w[1]].filter(k => !w[0].has(k)).length} · vs first evaluation: ` +
+      `only ${label(D.arms[1])} ${[...w[1]].filter(k => !w[0].has(k)).length} · vs first matching evaluation: ` +
       D.arms.map((a, i) => `${label(a)} +${gained(i)} −${lost(i)}`).join(", ");
   } else c.textContent = "";
 }
@@ -414,6 +425,8 @@ function seeds() {
 function cards() {
   const box = document.getElementById("cards"); box.replaceChildren();
   const leg = document.getElementById("cardsLegend"); leg.replaceChildren();
+  const check = selectedComparison();
+  if (check.status !== "matching") { text("span", check.reason, box, "sub"); return; }
   D.arms.forEach((a, i) => { const s = text("span", "", leg); text("span", "", s, "key").style.borderColor = color(i); s.append(` bar toward ${label(a)}: played more by ${label(a)}`); });
   const shown = D.arms.map(a => evalAt(a, at));
   if (!shown.every(e => e?.cards)) return;
@@ -443,9 +456,8 @@ function health() {
 
 function footer() {
   const f = document.getElementById("footer"); f.replaceChildren();
-  const m = D.arms.map(a => a.metadata || {});
-  text("p", `Evaluations play the top-ranked move on ${m[0].eval_seeds ?? "?"} held-out seeds (${m[0].eval_prefix || "EVAL"}-*), the same seeds for both runs. ` +
-    "The scrubber picks a fight count; each run shows its latest evaluation at or before it. Bands are 95% Wilson intervals on held-out wins.", f);
+  text("p", selectedComparison().reason + " The scrubber picks a fight count; each run shows its latest evaluation at or before it. " +
+    "Bands are 95% Wilson intervals on held-out wins. Separate curves remain visible when evaluation conditions differ or cannot be verified.", f);
   text("p", "Sandpit deals no damage: when its counter runs out at the start of the enemy turn, it kills the player before any attack, through block. " +
     "A loss counts as Sandpit when the final observation lost the Sandpit power, and as own action when it ended on the player's turn. " +
     "Lethal turns compare the attack announced at the start of the turn with HP plus block then, so block gained during the turn is what survives them. " +
@@ -468,7 +480,7 @@ function draw() {
   section("seeds", [sizes, e], seeds);
   section("cards", [sizes, e], cards);
   section("health", [sizes, at], health);
-  section("footer", [sizes.map(s => s[0])], footer);
+  section("footer", [sizes, e], footer);
   document.getElementById("scrubLabel").textContent = `${at.toLocaleString()} fights`;
 }
 

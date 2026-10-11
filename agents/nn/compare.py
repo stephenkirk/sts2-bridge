@@ -11,7 +11,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .contracts import heldout
+from .contracts import compare_conditions, condition_id, heldout
 from .watch import HERE, RUNS, run_metadata, runs
 
 
@@ -51,8 +51,16 @@ def arm(run):
                               boss=stats["boss"], turn=stats["turn"], n=stats["n"], cards=cards,
                               recorded=ev.get("recorded_greedy") and {k: ev["recorded_greedy"][k] for k in ("won", "hp", "boss", "turn")},
                               recorded_sampled=ev.get("recorded_sampled_win"), each=ev.get("heldout_fights")))
+            evals[-1].update(conditions=ev.get("conditions"), condition_id=condition_id(ev.get("conditions")))
     return dict(run=run, metadata=run_metadata(sessions), rows=rows, evals=sorted(evals, key=lambda e: e["fights"]),
                 probe=sorted({p["snapshot"]: p for p in lines(RUNS / run / "probe.jsonl")}.values(), key=lambda p: p["fights"]))
+
+
+def comparison_checks(arms):
+    """Check each distinct pair of exams, including evaluations before a resume."""
+    exams = [{e["condition_id"]: e["conditions"] for e in a["evals"]} for a in arms]
+    return {f"{ka}/{kb}": compare_conditions(a, b)
+            for ka, a in exams[0].items() for kb, b in exams[1].items()}
 
 
 def turn5(rows):
@@ -131,7 +139,8 @@ def main():
                     return
                 if prober:
                     prober.wanted.update(picked)
-                body, kind = json.dumps(dict(runs=names, arms=[arm(p) for p in picked])).encode(), "application/json"
+                arms = [arm(p) for p in picked]
+                body, kind = json.dumps(dict(runs=names, arms=arms, checks=comparison_checks(arms))).encode(), "application/json"
             else:
                 self.send_error(404)
                 return

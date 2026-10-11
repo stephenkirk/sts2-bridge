@@ -10,7 +10,8 @@ import torch
 from sts2bridge import CombatWorker
 
 from . import fights
-from .episode import Scoring, play
+from .contracts import evaluation_conditions, runtime_identity
+from .episode import MAX_TURNS, Scoring, play
 from .metrics import mean, summary
 from .show import load
 
@@ -39,17 +40,19 @@ def main():
         if not pool_file or hashlib.sha256(Path(pool_file).read_bytes()).hexdigest() != cand_ck.get("pool_digest"):
             ap.error("checkpoint's library manifest is missing or changed; supply --pool-file explicitly")
     scoring = Scoring("damage" if pool_name == "insatiable" else "hp", args.turn_cost_hp)
+    pool = fights.pool(pool_name, pool_file=pool_file, split=args.split)
+    seeds = [f"{args.seed_prefix}-{i}" for i in range(args.seeds)]
     pairs = []
     with CombatWorker() as worker:
-        for fight in fights.pool(pool_name, pool_file=pool_file, split=args.split):
-            for i in range(args.seeds):
-                seed = f"{args.seed_prefix}-{i}"
+        conditions = evaluation_conditions(pool, seeds, max_turns=MAX_TURNS, build=runtime_identity(worker.game_lib))
+        for fight in pool:
+            for seed in seeds:
                 base = play(worker, base_net, base_vocab, fight, seed, greedy=True, record=False, scoring=scoring)[1]
                 cand = play(worker, cand_net, cand_vocab, fight, seed, greedy=True, record=False, scoring=scoring)[1]
                 pairs.append(dict(fight=fight["name"], seed=seed, baseline=base, candidate=cand))
     report = dict(baseline=str(args.baseline), candidate=str(args.candidate), seed_prefix=args.seed_prefix,
                   pool=pool_name, split=args.split if pool_name == "library" else None,
-                  turn_cost_hp=args.turn_cost_hp,
+                  turn_cost_hp=args.turn_cost_hp, conditions=conditions,
                   summaries={k: summary([p[k] for p in pairs], fights=True) for k in ("baseline", "candidate")},
                   paired=dict(hp_change_delta=mean(p["candidate"]["hp_change"] - p["baseline"]["hp_change"] for p in pairs),
                               turns_delta=mean(p["candidate"]["turn"] - p["baseline"]["turn"] for p in pairs),

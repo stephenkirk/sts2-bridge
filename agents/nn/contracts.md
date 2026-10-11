@@ -50,7 +50,7 @@ explain the meaning of these scenarios.
 ## Scoring and episode result
 
 `episode.Scoring(reward="hp", turn_cost_hp=0.05)` is immutable and passed explicitly to
-`play`, `outcome`, and `step_rewards`. Reward modes are `hp`, `damage`, and `survival`.
+`play`, `outcome`, and `step_rewards`. Reward modes are `hp`, `damage`, `survival`, and `win`.
 Negative or nonfinite costs are rejected. Turn cost applies only to HP scoring.
 The CLI defaults and [formulas](README.md#rewards-and-metrics) are unchanged.
 
@@ -88,6 +88,17 @@ New training evaluations write one `heldout` summary under `eval`, alongside `ve
 `[decisions playable, decisions played]`; duplicate copies count once per decision.
 `heldout_vocab` contains `lookups`, `unknown`, and per-ID `counts` for that evaluation.
 
+Evaluations and standalone comparison reports carry `conditions` (format version 1):
+ordered fight names and canonical spec SHA-256 digests, full seed strings, execution method
+(greedy, spec start, map reuse, turn limit, first-min multi-pick), game/worker/stub/Python
+runner fingerprints, and a digest of those conditions. `heldout_fights[].seed` is now the
+full seed string; older logs may use an integer. Names remain part of the exam identity
+because paired consumers use them as row keys. Training reward and model configuration
+are excluded: policies may differ while taking the same exam.
+`contracts.compare_conditions` reports matching, different, or unknown. Missing,
+incomplete, unsupported, or invalid metadata cannot certify a match. The dashboard checks
+the selected evaluations and pairs only matching exams; historical logs remain readable.
+
 Old logs may contain flattened `heldout_*` metrics, sometimes alongside `heldout`.
 `contracts.heldout` is the single read adapter; nested summaries take precedence.
 New writers do not duplicate metrics. Existing checkpoints and library manifests need
@@ -101,6 +112,9 @@ under the same explicit configuration, rather than either checkpoint's training 
 Checkpoint architecture, vocabulary IDs, weights, optimizer, counters, scoring settings,
 and library digest retain their existing shape. `best.pt` copies the exact evaluated
 snapshot and attaches `eval`; the current learner weights may already be newer.
+Prepared library checkpoints also carry `pool_file` and `pool_digest`. Initializing
+without vocabulary extension requires the same library digest; changed or missing
+provenance requires `--extend-vocab`. `--no-extend-vocab` disables preset extension.
 
 ## Experiment provenance
 

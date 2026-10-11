@@ -35,7 +35,9 @@ class CombatWorker:
         self._log = open(self.log_path, "w")
         self._proc = subprocess.Popen(["dotnet", str(BINARY)], cwd=self.workdir, text=True, bufsize=1,
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log)
-        self.boot_ms = self._read()["boot_ms"]
+        boot = self._read()
+        self.boot_ms = boot["boot_ms"]
+        self.game_lib = boot.get("game_lib")  # Older worker binaries cannot certify their game build.
         self.run_trace_path = None
         self._run_trace = None
 
