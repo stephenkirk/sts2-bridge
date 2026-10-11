@@ -292,8 +292,6 @@ def parser():
     ap.add_argument("--pool-file", help="library curriculum manifest from agents.nn.library")
     ap.add_argument("--extend-vocab", action="store_true", help="collect training vocabulary while preserving checkpoint IDs")
     ap.add_argument("--train-on", choices=["seeds", "recorded"], default="seeds", help="recorded: the Insatiable's")
-    ap.add_argument("--start-turn", type=int, default=1,
-                    help="open the Insatiable on this turn of the hand-played win; pins every episode to the recording")
     ap.add_argument("--actors", type=int, default=5)
     ap.add_argument("--episodes", type=int, default=240, help="episodes per update")
     ap.add_argument("--hours", type=float, default=1.0)
@@ -342,8 +340,6 @@ def main(argv=None):
         ap.error("a library branch needs --extend-vocab for its new cards and encounters")
     if args.train_on == "recorded" and args.pool != "insatiable":
         ap.error("--train-on recorded needs --pool insatiable")
-    if args.start_turn != 1 and args.pool != "insatiable":
-        ap.error("--start-turn needs --pool insatiable")
     one = args.pool == "insatiable"
     args.reward = args.reward or ("damage" if one else "hp")
     args.eval_seeds = args.eval_seeds or (100 if one else 10)
@@ -356,7 +352,7 @@ def main(argv=None):
     if args.dry_run:
         print(json.dumps(experiment or dict(resolved=vars(args)), indent=2, default=str))
         return
-    fights = pools.pool(args.pool, pool_file=args.pool_file, start_turn=args.start_turn)
+    fights = pools.pool(args.pool, pool_file=args.pool_file)
     eval_fights = pools.pool(args.pool, pool_file=args.pool_file, split="validation") if args.pool == "library" else fights
     pool_metadata = {}
     if args.pool == "library":

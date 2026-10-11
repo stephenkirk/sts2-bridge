@@ -25,16 +25,8 @@ class Scoring:
 
 
 def send_start(worker, fight, seed):
-    """Load the recording when seed is None; otherwise start the spec without hashes and reuse its map.
-
-    A fight with a prefix ignores the seed: it replays the prefix on its recording, then asks for the boundary.
-    """
-    if fight.get("prefix"):
-        worker.load(fight["recording"], hashes=False)
-        for action in fight["prefix"]:
-            worker.step(action)
-        worker.send("observe")
-    elif seed is None:
+    """Load the recording when seed is None; otherwise start the spec without hashes and reuse its map."""
+    if seed is None:
         worker.send("load", mcr=fight["recording"], hashes=False)
     else:
         worker.send("start", spec=pools.spec(fight, seed), hashes=False, reuse_map=True)

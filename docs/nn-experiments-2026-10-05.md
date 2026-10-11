@@ -39,8 +39,9 @@ The 9% checkpoint is deleted. The 09-28 eight-minute damage runs sampled 0.4–1
 
 ## Turn-5 starts — dropped
 
-`--start-turn 5` replays the hand-win prefix. A random policy won 0/400 from there; 360 died on turn 5.
+The discarded `--start-turn 5` option replayed the hand-win prefix. A random policy won 0/400 from there; 360 died on turn 5.
 The deal is pinned, so training there memorises one tree. Fresh shuffles need a reshuffle/reseed command first.
+The option and its prefix-replay code were removed before merging.
 
 ## Library checkpoint, never trained on the boss
 
